@@ -119,7 +119,8 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        nestedScrollEnabled={true}
+        scrollEnabled={false}
+        nestedScrollEnabled={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <ThemedText style={[styles.emptyText, { color: theme.icon }]}>

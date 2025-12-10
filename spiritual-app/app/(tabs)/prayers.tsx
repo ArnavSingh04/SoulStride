@@ -3,7 +3,8 @@ import {
   View,
   StyleSheet,
   TouchableOpacity,
-  Dimensions
+  Dimensions,
+  ScrollView
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,68 +25,74 @@ export default function Prayers() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <ThemedText type="title" style={styles.headerTitle}>
-          Prayers
-        </ThemedText>
-        <ThemedText style={[styles.headerSubtitle, { color: theme.icon }]}>
-          Read sacred texts and prayers
-        </ThemedText>
-      </View>
-
-      {/* Guru Granth Sahib Card */}
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => setShowGuruGranthSahib(true)}
-        style={styles.guruGranthSahibCard}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <LinearGradient
-          colors={["#7C3AED", "#5B21B6"]}
-          start={[0, 0]}
-          end={[1, 1]}
-          style={styles.gradientCard}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.cardIconContainer}>
-              <Ionicons name="book" size={32} color="#fff" />
-            </View>
-            <View style={styles.cardTextContainer}>
-              <ThemedText style={styles.cardTitle}>
-                Guru Granth Sahib Ji
-              </ThemedText>
-              <ThemedText style={styles.cardTitlePunjabi}>
-                ਗੁਰੂ ਗ੍ਰੰਥ ਸਾਹਿਬ ਜੀ
-              </ThemedText>
-              <ThemedText style={styles.cardSubtitle}>
-                Read page by page with meanings
-              </ThemedText>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#fff" />
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <ThemedText type="title" style={styles.headerTitle}>
+            Prayers
+          </ThemedText>
+          <ThemedText style={[styles.headerSubtitle, { color: theme.icon }]}>
+            Read sacred texts and prayers
+          </ThemedText>
+        </View>
 
-      {/* Section Divider */}
-      <View style={styles.sectionDivider}>
-        <View
-          style={[styles.dividerLine, { backgroundColor: theme.icon + "30" }]}
-        />
-        <ThemedText
-          style={[styles.sectionTitle, { color: theme.icon }]}
-          type="subtitle"
+        {/* Guru Granth Sahib Card */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setShowGuruGranthSahib(true)}
+          style={styles.guruGranthSahibCard}
         >
-          Daily Prayers
-        </ThemedText>
-        <View
-          style={[styles.dividerLine, { backgroundColor: theme.icon + "30" }]}
-        />
-      </View>
+          <LinearGradient
+            colors={["#7C3AED", "#5B21B6"]}
+            start={[0, 0]}
+            end={[1, 1]}
+            style={styles.gradientCard}
+          >
+            <View style={styles.cardContent}>
+              <View style={styles.cardIconContainer}>
+                <Ionicons name="book" size={32} color="#fff" />
+              </View>
+              <View style={styles.cardTextContainer}>
+                <ThemedText style={styles.cardTitle}>
+                  Guru Granth Sahib Ji
+                </ThemedText>
+                <ThemedText style={styles.cardTitlePunjabi}>
+                  ਗੁਰੂ ਗ੍ਰੰਥ ਸਾਹਿਬ ਜੀ
+                </ThemedText>
+                <ThemedText style={styles.cardSubtitle}>
+                  Read page by page with meanings
+                </ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#fff" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
-      {/* Prayer List */}
-      <View style={styles.prayerListContainer}>
-        <PrayerList />
-      </View>
+        {/* Section Divider */}
+        <View style={styles.sectionDivider}>
+          <View
+            style={[styles.dividerLine, { backgroundColor: theme.icon + "30" }]}
+          />
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.icon }]}
+            type="subtitle"
+          >
+            Daily Prayers
+          </ThemedText>
+          <View
+            style={[styles.dividerLine, { backgroundColor: theme.icon + "30" }]}
+          />
+        </View>
+
+        {/* Prayer List */}
+        <View style={styles.prayerListContainer}>
+          <PrayerList />
+        </View>
+      </ScrollView>
 
       {/* Guru Granth Sahib Reader Modal */}
       <GuruGranthSahibReader
@@ -100,9 +107,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1
   },
+  scrollView: {
+    flex: 1
+  },
+  scrollContent: {
+    paddingBottom: 20
+  },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 50,
     paddingBottom: 16
   },
   headerTitle: {
@@ -175,6 +188,6 @@ const styles = StyleSheet.create({
     fontSize: 18
   },
   prayerListContainer: {
-    flex: 1
+    minHeight: 400
   }
 });

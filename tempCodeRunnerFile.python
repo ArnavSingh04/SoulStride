@@ -1,0 +1,123 @@
+import pdfplumber
+import json
+import re
+from pathlib import Path
+
+PDF_PATH = r"C:\Users\arnav\Downloads\SriGuruGranthSahibJiDarpanEnglish.pdf"     # <-- change to your actual file name
+OUTPUT_JSON = r"C:\Users\arnav\Downloads\output.json" 
+
+# --- Helpers --------------------------------------------------------
+
+def is_gurmukhi(text: str) -> bool:
+    """Detect if a line contains Gurmukhi characters (Punjabi)."""
+    return any("\u0A00" <= ch <= "\u0A7F" for ch in text)
+
+def is_latin(text: str) -> bool:
+    """Detect if a line contains Latin letters (translit or English)."""
+    return any("a" <= ch.lower() <= "z" for ch in text)
+
+def clean_line(text: str) -> str:
+    return text.strip()
+
+# Heuristic: transliteration vs English translation
+def looks_like_transliteration(text: str) -> bool:
+    """
+    Very rough heuristic:
+    - starts lowercase often
+    - mostly single sentence, fewer periods, many hyphens/diacritics
+    Tweak this function if needed after testing on your PDF!
+    """
+    t = text.strip()
+
+    # If it's ALL CAPS or Title Case with full sentences, it's probably English meaning
+    if re.search(r"[.!?]", t) and t[0].isupper():
+        return False
+
+    # Often transliteration starts lowercase
+    if t and t[0].islower():
+        return True
+
+    # If there are lots of hyphens or 'aa', 'ee', 'oo' patterns, likely transliteration
+    score = 0
+    if "-" in t:
+        score += 1
+    if re.search(r"(aa|ee|oo|kh|gh|ph|bh)", t.lower()):
+        score += 1
+
+    return score >= 1
+
+# --- Main conversion ------------------------------------------------
+
+def convert_pdf(pdf_path: str) -> list[dict]:
+    result = []
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_index, page in enumerate(pdf.pages, start=1):
+            raw_text = page.extract_text() or ""
+            lines = [clean_line(l) for l in raw_text.splitlines()]
+            # remove empties
+            lines = [l for l in lines if l]
+
+            # remove header lines like "ਪੰਨਾ ੧" or "Page 1"
+            lines = [
+                l for l in lines
+                if not l.startswith("ਪੰਨਾ") and not re.match(r"Page\s+\d+", l)
+            ]
+
+            page_obj = {"pageNumber": page_index, "lines": []}
+
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                # we only start a block when we see Punjabi
+                if is_gurmukhi(line):
+                    punjabi = line
+                    translit = ""
+                    english = ""
+
+                    j = i + 1
+
+                    # next line(s) are likely transliteration + English
+                    if j < len(lines) and is_latin(lines[j]):
+                        if looks_like_transliteration(lines[j]):
+                            translit = lines[j]
+                            j += 1
+
+                    if j < len(lines) and is_latin(lines[j]):
+                        english = lines[j]
+                        j += 1
+
+                    page_obj["lines"].append({
+                        "punjabi": punjabi,
+                        "english": english,
+                        "hinditransliteration": translit
+                    })
+
+                    i = j
+                else:
+                    # line is not Punjabi; skip it (could be comments or extra stuff)
+                    i += 1
+
+            print("page"+str(page_index))
+
+            result.append(page_obj)
+
+    return result
+
+# --- Run & save -----------------------------------------------------
+
+def main():
+    pdf_file = Path(PDF_PATH)
+    if not pdf_file.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_file}")
+
+    data = convert_pdf(str(pdf_file))
+
+    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"Saved {len(data)} pages to {OUTPUT_JSON}")
+
+if __name__ == "__main__":
+    main()

@@ -7,7 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   Modal,
-  Dimensions
+  Dimensions,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './themed-text';
@@ -38,6 +39,8 @@ export default function GuruGranthSahibReader({
   const [searchResults, setSearchResults] = useState<GuruGranthSahibPage[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [pageInput, setPageInput] = useState('');
+  const [showPageInputModal, setShowPageInputModal] = useState(false);
+  const [tempPageInput, setTempPageInput] = useState('');
 
   const totalPages = getTotalPages();
   const page = getPageByNumber(currentPage);
@@ -181,15 +184,15 @@ export default function GuruGranthSahibReader({
                   color: theme.text
                 }
               ]}
-              placeholder={`${currentPage} / ${totalPages}`}
-              placeholderTextColor={theme.icon}
-              value={pageInput}
-              onChangeText={setPageInput}
-              keyboardType="numeric"
-              onSubmitEditing={handlePageInputSubmit}
+              value={`${currentPage} / ${totalPages}`}
+              editable={false}
+              scrollEnabled={false}
             />
             <TouchableOpacity
-              onPress={handlePageInputSubmit}
+              onPress={() => {
+                setTempPageInput(currentPage.toString());
+                setShowPageInputModal(true);
+              }}
               style={styles.goButton}
             >
               <ThemedText style={{ color: theme.tint }}>Go</ThemedText>
@@ -240,6 +243,79 @@ export default function GuruGranthSahibReader({
           )}
         </ScrollView>
       </ThemedView>
+
+      {/* Page Input Modal */}
+      <Modal
+        visible={showPageInputModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPageInputModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPageInputModal(false)}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.background }
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
+            <ThemedText type="subtitle" style={styles.modalTitle}>
+              Go to Page
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0',
+                  color: theme.text
+                }
+              ]}
+              placeholder={`Enter page (1-${totalPages})`}
+              placeholderTextColor={theme.icon}
+              value={tempPageInput}
+              onChangeText={setTempPageInput}
+              keyboardType="numeric"
+              autoFocus={true}
+              onSubmitEditing={() => {
+                const pageNum = parseInt(tempPageInput);
+                if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                  goToPage(pageNum);
+                  setShowPageInputModal(false);
+                }
+              }}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                onPress={() => setShowPageInputModal(false)}
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0'
+                  }
+                ]}
+              >
+                <ThemedText style={{ color: theme.icon }}>Cancel</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const pageNum = parseInt(tempPageInput);
+                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                    goToPage(pageNum);
+                    setShowPageInputModal(false);
+                  }
+                }}
+                style={[styles.modalButton, { backgroundColor: theme.tint }]}
+              >
+                <ThemedText style={{ color: '#fff' }}>Go</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 }
@@ -315,13 +391,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 16
   },
   pageInput: {
-    height: 36,
-    width: 80,
+    height: 40,
+    minWidth: 100,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    textAlign: 'center',
+    paddingHorizontal: 16,
+    marginRight: 8,
     fontSize: 16,
-    marginRight: 8
+    fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center'
   },
   goButton: {
     paddingHorizontal: 12,
@@ -356,6 +434,46 @@ const styles = StyleSheet.create({
     height: 1,
     marginTop: 16,
     marginBottom: 4
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  modalContent: {
+    width: '80%',
+    maxWidth: 300,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4
+  },
+  modalTitle: {
+    marginBottom: 16,
+    textAlign: 'center',
+    fontSize: 20
+  },
+  modalInput: {
+    height: 50,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    marginBottom: 20
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
 });
 
