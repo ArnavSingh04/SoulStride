@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS prayers (
 CREATE TABLE IF NOT EXISTS prayer_lines (
   id BIGSERIAL PRIMARY KEY,
   prayer_id VARCHAR(100) REFERENCES prayers(id) ON DELETE CASCADE,
+  holy_book_id VARCHAR(100) REFERENCES holy_books(id) ON DELETE CASCADE,
   line_order INTEGER NOT NULL,
   punjabi TEXT NOT NULL,
   english TEXT NOT NULL,
@@ -70,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_bani_lines_holy_book ON bani_lines(holy_book_id);
 CREATE INDEX IF NOT EXISTS idx_bani_lines_page ON bani_lines(page_number);
 CREATE INDEX IF NOT EXISTS idx_bani_lines_ang ON bani_lines(ang);
 CREATE INDEX IF NOT EXISTS idx_prayer_lines_prayer ON prayer_lines(prayer_id);
+CREATE INDEX IF NOT EXISTS idx_prayer_lines_holy_book ON prayer_lines(holy_book_id);
 CREATE INDEX IF NOT EXISTS idx_prayers_holy_book ON prayers(holy_book_id);
 
 -- Full-text search indexes
