@@ -7,7 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   Modal,
-  FlatList
+  FlatList,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './themed-text';
@@ -15,40 +16,68 @@ import { ThemedView } from './themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
-  prayersData,
-  searchPrayers,
+  getAllPrayers,
+  searchPrayers as searchPrayersDB,
   getPrayerById,
-  type Prayer
-} from '@/data/prayers';
+} from '@/lib/database.service';
+import type { PrayerWithLines } from '@/lib/database.types';
 
 interface PrayerListProps {
-  onPrayerSelect?: (prayer: Prayer) => void;
+  onPrayerSelect?: (prayer: PrayerWithLines) => void;
 }
 
 export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredPrayers, setFilteredPrayers] = useState<Prayer[]>(prayersData);
-  const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
+  const [filteredPrayers, setFilteredPrayers] = useState<PrayerWithLines[]>([]);
+  const [selectedPrayer, setSelectedPrayer] = useState<PrayerWithLines | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadPrayers();
+  }, []);
 
   useEffect(() => {
     if (searchQuery.trim()) {
-      const results = searchPrayers(searchQuery);
-      setFilteredPrayers(results);
+      searchPrayersData(searchQuery);
     } else {
-      setFilteredPrayers(prayersData);
+      loadPrayers();
     }
   }, [searchQuery]);
 
-  const handlePrayerPress = (prayer: Prayer) => {
+  const loadPrayers = async () => {
+    setLoading(true);
+    try {
+      const prayers = await getAllPrayers();
+      setFilteredPrayers(prayers);
+    } catch (error) {
+      console.error('Error loading prayers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchPrayersData = async (query: string) => {
+    setLoading(true);
+    try {
+      const results = await searchPrayersDB(query);
+      setFilteredPrayers(results);
+    } catch (error) {
+      console.error('Error searching prayers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrayerPress = (prayer: PrayerWithLines) => {
     setSelectedPrayer(prayer);
     if (onPrayerSelect) {
       onPrayerSelect(prayer);
     }
   };
 
-  const renderPrayerItem = ({ item }: { item: Prayer }) => (
+  const renderPrayerItem = ({ item }: { item: PrayerWithLines }) => (
     <TouchableOpacity
       style={[
         styles.prayerItem,
@@ -64,7 +93,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
           {item.name}
         </ThemedText>
         <ThemedText style={[styles.prayerNamePunjabi, { color: theme.tint }]}>
-          {item.namePunjabi}
+          {item.name_punjabi}
         </ThemedText>
       </View>
       <ThemedText
@@ -113,22 +142,31 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
       </View>
 
       {/* Prayer List */}
-      <FlatList
-        data={filteredPrayers}
-        renderItem={renderPrayerItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={false}
-        nestedScrollEnabled={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <ThemedText style={[styles.emptyText, { color: theme.icon }]}>
-              No prayers found
-            </ThemedText>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.tint} />
+          <ThemedText style={[styles.loadingText, { color: theme.icon }]}>
+            Loading prayers...
+          </ThemedText>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredPrayers}
+          renderItem={renderPrayerItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
+          nestedScrollEnabled={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <ThemedText style={[styles.emptyText, { color: theme.icon }]}>
+                No prayers found
+              </ThemedText>
+            </View>
+          }
+        />
+      )}
 
       {/* Prayer Detail Modal */}
       <Modal
@@ -153,7 +191,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
                 <ThemedText
                   style={[styles.modalTitlePunjabi, { color: theme.tint }]}
                 >
-                  {selectedPrayer.namePunjabi}
+                  {selectedPrayer.name_punjabi}
                 </ThemedText>
               </View>
               <View style={{ width: 36 }} />
@@ -257,6 +295,15 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loadingText: {
+    fontSize: 14,
+    marginTop: 12
   },
   modalContainer: {
     flex: 1

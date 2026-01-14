@@ -8,7 +8,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "db:test": "tsx scripts/test-connection.ts",
+    "migrate:all": "tsx scripts/migrate-all.ts",
+    "migrate:prayers": "tsx scripts/migrate-prayers.ts",
+    "migrate:ggs": "tsx scripts/migrate-ggs.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -16,6 +20,7 @@
     "@react-navigation/bottom-tabs": "^7.8.6",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.21",
+    "@supabase/supabase-js": "^2.90.1",
     "expo": "~54.0.25",
     "expo-constants": "~18.0.10",
     "expo-font": "~14.0.9",
@@ -46,6 +51,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.2"
   },
   "private": true

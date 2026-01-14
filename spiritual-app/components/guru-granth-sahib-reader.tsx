@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   Modal,
   Dimensions,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './themed-text';
@@ -16,12 +17,11 @@ import { ThemedView } from './themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
-  guruGranthSahibData,
   getPageByNumber,
   searchPages,
   getTotalPages,
-  type GuruGranthSahibPage
-} from '@/data/guruGranthSahib';
+} from '@/lib/database.service';
+import type { PageWithLines, BaniLine } from '@/lib/database.types';
 
 interface GuruGranthSahibReaderProps {
   visible: boolean;
@@ -36,23 +36,67 @@ export default function GuruGranthSahibReader({
   const theme = Colors[colorScheme ?? 'light'];
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<GuruGranthSahibPage[]>([]);
+  const [searchResults, setSearchResults] = useState<BaniLine[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [pageInput, setPageInput] = useState('');
   const [showPageInputModal, setShowPageInputModal] = useState(false);
   const [tempPageInput, setTempPageInput] = useState('');
+  const [totalPages, setTotalPages] = useState(1430);
+  const [page, setPage] = useState<PageWithLines | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
 
-  const totalPages = getTotalPages();
-  const page = getPageByNumber(currentPage);
+  useEffect(() => {
+    loadTotalPages();
+  }, []);
+
+  useEffect(() => {
+    if (visible) {
+      loadPage(currentPage);
+    }
+  }, [currentPage, visible]);
 
   useEffect(() => {
     if (searchQuery.trim()) {
-      const results = searchPages(searchQuery);
-      setSearchResults(results);
+      searchContent(searchQuery);
     } else {
       setSearchResults([]);
     }
   }, [searchQuery]);
+
+  const loadTotalPages = async () => {
+    try {
+      const total = await getTotalPages();
+      setTotalPages(total);
+    } catch (error) {
+      console.error('Error loading total pages:', error);
+    }
+  };
+
+  const loadPage = async (pageNum: number) => {
+    setLoading(true);
+    try {
+      const pageData = await getPageByNumber(pageNum);
+      setPage(pageData);
+    } catch (error) {
+      console.error('Error loading page:', error);
+      Alert.alert('Error', 'Failed to load page');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchContent = async (query: string) => {
+    setSearchLoading(true);
+    try {
+      const results = await searchPages(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Error searching:', error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   const goToPage = (pageNum: number) => {
     if (pageNum >= 1 && pageNum <= totalPages) {
@@ -80,10 +124,12 @@ export default function GuruGranthSahibReader({
     }
   };
 
-  const handleSearchResultSelect = (page: GuruGranthSahibPage) => {
-    setCurrentPage(page.pageNumber);
-    setSearchQuery('');
-    setShowSearch(false);
+  const handleSearchResultSelect = (line: BaniLine) => {
+    if (line.page_number) {
+      setCurrentPage(line.page_number);
+      setSearchQuery('');
+      setShowSearch(false);
+    }
   };
 
   return (
@@ -130,11 +176,15 @@ export default function GuruGranthSahibReader({
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
-            {searchResults.length > 0 && (
+            {searchLoading ? (
+              <View style={styles.searchLoadingContainer}>
+                <ActivityIndicator size="small" color={theme.tint} />
+              </View>
+            ) : searchResults.length > 0 ? (
               <ScrollView style={styles.searchResults}>
-                {searchResults.map((result) => (
+                {searchResults.map((result, idx) => (
                   <TouchableOpacity
-                    key={result.pageNumber}
+                    key={`${result.page_number}-${idx}`}
                     style={[
                       styles.searchResultItem,
                       { borderBottomColor: theme.icon + '30' }
@@ -142,19 +192,26 @@ export default function GuruGranthSahibReader({
                     onPress={() => handleSearchResultSelect(result)}
                   >
                     <ThemedText type="defaultSemiBold">
-                      Page {result.pageNumber}
+                      Page {result.page_number} {result.ang ? `(Ang ${result.ang})` : ''}
                     </ThemedText>
                     <ThemedText
                       type="default"
                       style={styles.searchResultPreview}
+                      numberOfLines={2}
+                    >
+                      {result.punjabi}
+                    </ThemedText>
+                    <ThemedText
+                      type="default"
+                      style={[styles.searchResultEnglish, { color: theme.icon }]}
                       numberOfLines={1}
                     >
-                      {result.lines[0]?.punjabi || ''}
+                      {result.english}
                     </ThemedText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            )}
+            ) : null}
           </View>
         )}
 
@@ -217,13 +274,20 @@ export default function GuruGranthSahibReader({
 
         {/* Content */}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {page && (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.tint} />
+              <ThemedText style={[styles.loadingText, { color: theme.icon }]}>
+                Loading page...
+              </ThemedText>
+            </View>
+          ) : page ? (
             <View style={styles.pageContent}>
               <ThemedText type="subtitle" style={styles.pageNumber}>
                 Page {page.pageNumber}
               </ThemedText>
               {page.lines.map((line, index) => (
-                <View key={index} style={styles.lineContainer}>
+                <View key={line.id || index} style={styles.lineContainer}>
                   <ThemedText style={[styles.punjabiText, { fontFamily: 'serif' }]}>
                     {line.punjabi}
                   </ThemedText>
@@ -232,6 +296,13 @@ export default function GuruGranthSahibReader({
                   >
                     {line.english}
                   </ThemedText>
+                  {line.transliteration_english && (
+                    <ThemedText
+                      style={[styles.transliterationText, { color: theme.icon }]}
+                    >
+                      {line.transliteration_english}
+                    </ThemedText>
+                  )}
                   {index < page.lines.length - 1 && (
                     <View
                       style={[styles.separator, { backgroundColor: theme.icon + '20' }]}
@@ -239,6 +310,12 @@ export default function GuruGranthSahibReader({
                   )}
                 </View>
               ))}
+            </View>
+          ) : (
+            <View style={styles.loadingContainer}>
+              <ThemedText style={[styles.loadingText, { color: theme.icon }]}>
+                No content available
+              </ThemedText>
             </View>
           )}
         </ScrollView>
@@ -366,6 +443,33 @@ const styles = StyleSheet.create({
   searchResultPreview: {
     marginTop: 4,
     fontSize: 14,
+    opacity: 0.7
+  },
+  searchResultEnglish: {
+    marginTop: 2,
+    fontSize: 12,
+    opacity: 0.6,
+    fontStyle: 'italic'
+  },
+  searchLoadingContainer: {
+    padding: 20,
+    alignItems: 'center'
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14
+  },
+  transliterationText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: 'italic',
+    marginTop: 4,
     opacity: 0.7
   },
   pageNav: {
