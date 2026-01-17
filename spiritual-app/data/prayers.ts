@@ -4,6 +4,8 @@
  *
  * Note: This app now uses Supabase database for all prayer data.
  * The functions here fetch data from the database rather than local files.
+ *
+ * npm run migrate:prayers:json
  */
 
 import {getAllPrayers as getAllPrayersDB, getPrayerById as getPrayerByIdDB, searchPrayers as searchPrayersDB,} from '@/lib/database.service';
