@@ -13,7 +13,7 @@ import { ThemedView } from './themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { RoutineConfig, TimeSlot } from '@/types/routine';
-import { getAllPrayers, Prayer } from '@/data/prayers';
+import { getAllPrayers, Prayer, PrayerWithLines } from '@/data/prayers';
 import { TIME_SLOT_LABELS } from '@/types/routine';
 import ReminderSettings from './reminder-settings';
 
@@ -33,11 +33,15 @@ export default function RoutineEditModal({
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const [localConfig, setLocalConfig] = useState<RoutineConfig>(config);
-  const [allPrayers, setAllPrayers] = useState<Prayer[]>([]);
+  const [allPrayers, setAllPrayers] = useState<PrayerWithLines[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
 
   useEffect(() => {
-    setAllPrayers(getAllPrayers());
+    const loadPrayers = async () => {
+      const prayers = await getAllPrayers();
+      setAllPrayers(prayers);
+    };
+    loadPrayers();
     setLocalConfig(config);
   }, [config]);
 

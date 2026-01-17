@@ -23,7 +23,7 @@ import {
   getTodayDate
 } from '@/services/routine-storage';
 import { scheduleRoutineReminders } from '@/services/notifications';
-import { getAllPrayers, getPrayerById, Prayer } from '@/data/prayers';
+import { getAllPrayers, getPrayerById, Prayer, PrayerWithLines } from '@/data/prayers';
 import RoutineEditModal from '@/components/routine-edit-modal';
 
 export default function Routine() {
@@ -34,7 +34,8 @@ export default function Routine() {
   const [stats, setStats] = useState({ completed: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
+  const [selectedPrayer, setSelectedPrayer] = useState<PrayerWithLines | null>(null);
+  const [prayersCache, setPrayersCache] = useState<Map<string, Prayer>>(new Map());
   const [currentDate, setCurrentDate] = useState(() => {
     try {
       return getTodayDate();
@@ -70,10 +71,18 @@ export default function Routine() {
     try {
       setLoading(true);
       setError(null);
-      const [routineConfig, todayCompletion] = await Promise.all([
+      const [routineConfig, todayCompletion, allPrayers] = await Promise.all([
         loadRoutineConfig(),
-        loadTodayCompletion()
+        loadTodayCompletion(),
+        getAllPrayers()
       ]);
+      
+      // Build prayers cache
+      const cache = new Map<string, Prayer>();
+      allPrayers.forEach(prayer => {
+        cache.set(prayer.id, prayer);
+      });
+      setPrayersCache(cache);
       
       setConfig(routineConfig);
       setCompletion(todayCompletion);
@@ -134,8 +143,8 @@ export default function Routine() {
     }
   };
 
-  const handlePrayerPress = (prayerId: string) => {
-    const prayer = getPrayerById(prayerId);
+  const handlePrayerPress = async (prayerId: string) => {
+    const prayer = await getPrayerById(prayerId);
     if (prayer) {
       setSelectedPrayer(prayer);
     }
@@ -277,7 +286,7 @@ export default function Routine() {
         {config.slots.map((slot) => {
           const slotLabel = TIME_SLOT_LABELS[slot.timeSlot];
           const slotPrayers = slot.prayerIds
-            .map(id => getPrayerById(id))
+            .map(id => prayersCache.get(id))
             .filter((p): p is Prayer => p !== undefined);
 
           if (slotPrayers.length === 0) {
@@ -429,6 +438,13 @@ export default function Routine() {
                   >
                     {line.punjabi}
                   </ThemedText>
+                  {line.transliteration_english && (
+                    <ThemedText
+                      style={[styles.prayerTransliterationText, { color: theme.icon }]}
+                    >
+                      {line.transliteration_english}
+                    </ThemedText>
+                  )}
                   <ThemedText
                     style={[styles.prayerEnglishText, { color: theme.icon }]}
                   >
@@ -641,6 +657,13 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     marginBottom: 8,
     textAlign: 'left'
+  },
+  prayerTransliterationText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 6,
+    fontStyle: 'italic',
+    opacity: 0.8
   },
   prayerEnglishText: {
     fontSize: 14,

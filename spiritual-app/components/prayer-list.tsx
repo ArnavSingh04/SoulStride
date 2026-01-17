@@ -211,6 +211,13 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
                   >
                     {line.punjabi}
                   </ThemedText>
+                  {line.transliteration_english && (
+                    <ThemedText
+                      style={[styles.prayerTransliterationText, { color: theme.icon }]}
+                    >
+                      {line.transliteration_english}
+                    </ThemedText>
+                  )}
                   <ThemedText
                     style={[styles.prayerEnglishText, { color: theme.icon }]}
                   >
@@ -349,6 +356,13 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     marginBottom: 8,
     textAlign: 'left'
+  },
+  prayerTransliterationText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 6,
+    fontStyle: 'italic',
+    opacity: 0.8
   },
   prayerEnglishText: {
     fontSize: 14,

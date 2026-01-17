@@ -12,6 +12,7 @@
     "db:test": "tsx scripts/test-connection.ts",
     "migrate:all": "tsx scripts/migrate-all.ts",
     "migrate:prayers": "tsx scripts/migrate-prayers.ts",
+    "migrate:prayers:json": "tsx scripts/migrate-prayers-json.ts",
     "migrate:ggs": "tsx scripts/migrate-ggs.ts"
   },
   "dependencies": {
