@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,18 +9,18 @@ import {
   Modal,
   FlatList,
   ActivityIndicator
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ThemedText } from "./themed-text";
+import { ThemedView } from "./themed-view";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   getAllPrayers,
   searchPrayers as searchPrayersDB,
-  getPrayerById,
-} from '@/lib/database.service';
-import type { PrayerWithLines } from '@/lib/database.types';
+  getPrayerById
+} from "@/lib/database.service";
+import type { PrayerWithLines } from "@/lib/database.types";
 
 interface PrayerListProps {
   onPrayerSelect?: (prayer: PrayerWithLines) => void;
@@ -28,10 +28,12 @@ interface PrayerListProps {
 
 export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
-  const [searchQuery, setSearchQuery] = useState('');
+  const theme = Colors[colorScheme ?? "light"];
+  const [searchQuery, setSearchQuery] = useState("");
   const [filteredPrayers, setFilteredPrayers] = useState<PrayerWithLines[]>([]);
-  const [selectedPrayer, setSelectedPrayer] = useState<PrayerWithLines | null>(null);
+  const [selectedPrayer, setSelectedPrayer] = useState<PrayerWithLines | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
       const prayers = await getAllPrayers();
       setFilteredPrayers(prayers);
     } catch (error) {
-      console.error('Error loading prayers:', error);
+      console.error("Error loading prayers:", error);
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
       const results = await searchPrayersDB(query);
       setFilteredPrayers(results);
     } catch (error) {
-      console.error('Error searching prayers:', error);
+      console.error("Error searching prayers:", error);
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
       style={[
         styles.prayerItem,
         {
-          backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f8f8f8',
+          backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8",
           borderLeftColor: theme.tint
         }
       ]}
@@ -114,7 +116,9 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   return (
     <View style={styles.container}>
       {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
+      <View
+        style={[styles.searchContainer, { backgroundColor: theme.background }]}
+      >
         <Ionicons
           name="search"
           size={20}
@@ -125,7 +129,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
           style={[
             styles.searchInput,
             {
-              backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0',
+              backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
               color: theme.text
             }
           ]}
@@ -135,7 +139,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
           onChangeText={setSearchQuery}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
+          <TouchableOpacity onPress={() => setSearchQuery("")}>
             <Ionicons name="close-circle" size={20} color={theme.icon} />
           </TouchableOpacity>
         )}
@@ -177,7 +181,12 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
       >
         {selectedPrayer && (
           <ThemedView style={styles.modalContainer}>
-            <View style={[styles.modalHeader, { backgroundColor: theme.background }]}>
+            <View
+              style={[
+                styles.modalHeader,
+                { backgroundColor: theme.background }
+              ]}
+            >
               <TouchableOpacity
                 onPress={() => setSelectedPrayer(null)}
                 style={styles.closeButton}
@@ -197,7 +206,10 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
               <View style={{ width: 36 }} />
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+            >
               <ThemedText
                 style={[styles.modalDescription, { color: theme.icon }]}
               >
@@ -207,13 +219,16 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
               {selectedPrayer.lines.map((line, index) => (
                 <View key={index} style={styles.prayerLineContainer}>
                   <ThemedText
-                    style={[styles.prayerPunjabiText, { fontFamily: 'serif' }]}
+                    style={[styles.prayerPunjabiText, { fontFamily: "serif" }]}
                   >
                     {line.punjabi}
                   </ThemedText>
                   {line.transliteration_english && (
                     <ThemedText
-                      style={[styles.prayerTransliterationText, { color: theme.icon }]}
+                      style={[
+                        styles.prayerTransliterationText,
+                        { color: theme.icon }
+                      ]}
                     >
                       {line.transliteration_english}
                     </ThemedText>
@@ -227,7 +242,7 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
                     <View
                       style={[
                         styles.prayerSeparator,
-                        { backgroundColor: theme.icon + '20' }
+                        { backgroundColor: theme.icon + "20" }
                       ]}
                     />
                   )}
@@ -247,12 +262,12 @@ const styles = StyleSheet.create({
     minHeight: 400
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0'
+    borderBottomColor: "#e0e0e0"
   },
   searchIcon: {
     marginRight: 8
@@ -289,24 +304,24 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   prayerFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
   },
   prayerLineCount: {
     fontSize: 12
   },
   emptyContainer: {
     padding: 40,
-    alignItems: 'center'
+    alignItems: "center"
   },
   emptyText: {
     fontSize: 16
   },
   loadingContainer: {
     padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center'
+    alignItems: "center",
+    justifyContent: "center"
   },
   loadingText: {
     fontSize: 14,
@@ -316,20 +331,20 @@ const styles = StyleSheet.create({
     flex: 1
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0'
+    borderBottomColor: "#e0e0e0"
   },
   closeButton: {
     padding: 4
   },
   modalTitleContainer: {
     flex: 1,
-    alignItems: 'center'
+    alignItems: "center"
   },
   modalTitle: {
     fontSize: 20,
@@ -346,7 +361,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 24,
     lineHeight: 20,
-    fontStyle: 'italic'
+    fontStyle: "italic"
   },
   prayerLineContainer: {
     marginBottom: 20
@@ -355,19 +370,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 32,
     marginBottom: 8,
-    textAlign: 'left'
+    textAlign: "left"
   },
   prayerTransliterationText: {
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 6,
-    fontStyle: 'italic',
+    fontStyle: "italic",
     opacity: 0.8
   },
   prayerEnglishText: {
     fontSize: 14,
     lineHeight: 20,
-    fontStyle: 'italic',
+    fontStyle: "italic",
     marginTop: 4
   },
   prayerSeparator: {
@@ -376,4 +391,3 @@ const styles = StyleSheet.create({
     marginBottom: 4
   }
 });
-

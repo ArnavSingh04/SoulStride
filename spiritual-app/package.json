@@ -13,7 +13,12 @@
     "migrate:all": "tsx scripts/migrate-all.ts",
     "migrate:prayers": "tsx scripts/migrate-prayers.ts",
     "migrate:prayers:json": "tsx scripts/migrate-prayers-json.ts",
-    "migrate:ggs": "tsx scripts/migrate-ggs.ts"
+    "migrate:ggs": "tsx scripts/migrate-ggs.ts",
+    "build:android": "eas build --platform android --profile preview",
+    "build:ios": "eas build --platform ios --profile preview",
+    "build:all": "eas build --platform all --profile preview",
+    "build:android:prod": "eas build --platform android --profile production",
+    "build:ios:prod": "eas build --platform ios --profile production"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

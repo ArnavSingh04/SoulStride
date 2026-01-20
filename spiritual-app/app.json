@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.soulstride.spiritualapp"
     },
     "web": {
       "output": "static",
@@ -51,6 +52,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "96c8fbe3-55a5-420b-a894-04d1c67cc56a"
+      }
     }
   }
 }
