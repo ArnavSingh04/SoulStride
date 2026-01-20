@@ -16,9 +16,15 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          height: 70,
-          paddingBottom: 10,
-          paddingTop: 10
+          height: 85,
+          paddingBottom: 12,
+          paddingTop: 12,
+          borderTopWidth: 1,
+          borderTopColor: colorScheme === "dark" ? "#333" : "#e0e0e0"
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "600"
         }
       }}
     >
@@ -64,13 +70,13 @@ export default function TabLayout() {
         }}
       />
 
-      {/* PROFILE */}
+      {/* SETTINGS */}
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: "Settings",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.fill" color={color} />
+            <IconSymbol size={28} name="gearshape.fill" color={color} />
           )
         }}
       />

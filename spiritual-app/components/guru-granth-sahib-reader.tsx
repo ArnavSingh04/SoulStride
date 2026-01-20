@@ -385,7 +385,12 @@ export default function GuruGranthSahibReader({
                     setShowPageInputModal(false);
                   }
                 }}
-                style={[styles.modalButton, { backgroundColor: theme.tint }]}
+                style={[
+                  styles.modalButton, 
+                  { 
+                    backgroundColor: colorScheme === 'dark' ? '#4a4a4a' : theme.tint 
+                  }
+                ]}
               >
                 <ThemedText style={{ color: '#fff' }}>Go</ThemedText>
               </TouchableOpacity>

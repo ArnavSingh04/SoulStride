@@ -21,6 +21,10 @@ import {
   getPrayerById
 } from "@/lib/database.service";
 import type { PrayerWithLines } from "@/lib/database.types";
+import {
+  loadPrayerPreferences,
+  type PrayerPreferences
+} from "@/services/prayer-preferences";
 
 interface PrayerListProps {
   onPrayerSelect?: (prayer: PrayerWithLines) => void;
@@ -35,10 +39,23 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [preferences, setPreferences] = useState<PrayerPreferences | null>(
+    null
+  );
 
   useEffect(() => {
     loadPrayers();
+    loadPreferences();
   }, []);
+
+  const loadPreferences = async () => {
+    try {
+      const prefs = await loadPrayerPreferences();
+      setPreferences(prefs);
+    } catch (error) {
+      console.error("Error loading preferences:", error);
+    }
+  };
 
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -48,11 +65,32 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
     }
   }, [searchQuery]);
 
+  // Custom prayer ordering
+  const getPrayerOrder = (prayerName: string): number => {
+    const name = prayerName.toLowerCase();
+    if (name.includes("japji")) return 1;
+    if (name.includes("jaap")) return 2;
+    if (name.includes("tav prasad") || name.includes("tavprasad")) return 3;
+    if (name.includes("chaupai")) return 4;
+    if (name.includes("anand")) return 5;
+    return 99; // Other prayers come after
+  };
+
   const loadPrayers = async () => {
     setLoading(true);
     try {
       const prayers = await getAllPrayers();
-      setFilteredPrayers(prayers);
+      // Sort prayers by custom order, then alphabetically for others
+      const sortedPrayers = [...prayers].sort((a, b) => {
+        const orderA = getPrayerOrder(a.name);
+        const orderB = getPrayerOrder(b.name);
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        // If same order, sort alphabetically
+        return a.name.localeCompare(b.name);
+      });
+      setFilteredPrayers(sortedPrayers);
     } catch (error) {
       console.error("Error loading prayers:", error);
     } finally {
@@ -72,7 +110,9 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
     }
   };
 
-  const handlePrayerPress = (prayer: PrayerWithLines) => {
+  const handlePrayerPress = async (prayer: PrayerWithLines) => {
+    // Reload preferences when opening a prayer to get latest settings
+    await loadPreferences();
     setSelectedPrayer(prayer);
     if (onPrayerSelect) {
       onPrayerSelect(prayer);
@@ -216,38 +256,138 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
                 {selectedPrayer.description}
               </ThemedText>
 
-              {selectedPrayer.lines.map((line, index) => (
-                <View key={index} style={styles.prayerLineContainer}>
-                  <ThemedText
-                    style={[styles.prayerPunjabiText, { fontFamily: "serif" }]}
-                  >
-                    {line.punjabi}
-                  </ThemedText>
-                  {line.transliteration_english && (
-                    <ThemedText
-                      style={[
-                        styles.prayerTransliterationText,
-                        { color: theme.icon }
-                      ]}
-                    >
-                      {line.transliteration_english}
-                    </ThemedText>
-                  )}
-                  <ThemedText
-                    style={[styles.prayerEnglishText, { color: theme.icon }]}
-                  >
-                    {line.english}
-                  </ThemedText>
-                  {index < selectedPrayer.lines.length - 1 && (
-                    <View
-                      style={[
-                        styles.prayerSeparator,
-                        { backgroundColor: theme.icon + "20" }
-                      ]}
-                    />
-                  )}
-                </View>
-              ))}
+              {selectedPrayer.lines.map((line, index) => {
+                // Determine what to display based on preferences
+                const showOriginal = preferences?.showOriginal ?? true;
+                const showTranslation = preferences?.showTranslation ?? true;
+                const showTransliteration =
+                  preferences?.showTransliteration ?? true;
+                const primaryLanguage =
+                  preferences?.primaryLanguage ?? "punjabi";
+                const translationLanguage =
+                  preferences?.translationLanguage ?? "english";
+
+                // Get the primary text based on selected language
+                const getPrimaryText = () => {
+                  if (primaryLanguage === "punjabi") return line.punjabi;
+                  if (primaryLanguage === "english") return line.english;
+                  if (primaryLanguage === "hindi")
+                    return line.hindi || line.english;
+                  return line.punjabi;
+                };
+
+                // Get translation text
+                const getTranslationText = () => {
+                  if (translationLanguage === "english") return line.english;
+                  if (translationLanguage === "hindi")
+                    return line.hindi || line.english;
+                  return line.english;
+                };
+
+                // Get transliteration text
+                const getTransliterationText = () => {
+                  if (translationLanguage === "english")
+                    return line.transliteration_english;
+                  if (translationLanguage === "hindi")
+                    return (
+                      line.transliteration_hindi || line.transliteration_english
+                    );
+                  return line.transliteration_english;
+                };
+
+                const primaryText = getPrimaryText();
+                const translationText = getTranslationText();
+                const transliterationText = getTransliterationText();
+
+                // Determine if we should show original Punjabi text
+                // This toggle controls whether to show the original Punjabi text
+                const shouldShowOriginalPunjabi = showOriginal && line.punjabi;
+
+                // Determine if we should show primary text
+                // If primary is punjabi, showOriginal controls whether to show it (since it's the original)
+                // If primary is not punjabi, always show the primary text
+                const shouldShowPrimary =
+                  primaryLanguage === "punjabi"
+                    ? showOriginal // If primary is punjabi, showOriginal controls it
+                    : true; // If primary is not punjabi, always show it
+
+                // Determine if we should show translation
+                const shouldShowTranslation =
+                  showTranslation &&
+                  translationText &&
+                  (primaryLanguage === "punjabi" ||
+                    (primaryLanguage === "english" &&
+                      translationLanguage === "hindi") ||
+                    (primaryLanguage === "hindi" &&
+                      translationLanguage === "english"));
+
+                return (
+                  <View key={index} style={styles.prayerLineContainer}>
+                    {/* Primary language text (only if not punjabi) */}
+                    {shouldShowPrimary &&
+                      primaryText &&
+                      primaryLanguage !== "punjabi" && (
+                        <ThemedText
+                          style={[
+                            styles.prayerPrimaryText,
+                            { fontFamily: undefined }
+                          ]}
+                        >
+                          {primaryText}
+                        </ThemedText>
+                      )}
+
+                    {/* Original Punjabi text (shown when showOriginal is true) */}
+                    {shouldShowOriginalPunjabi && (
+                      <ThemedText
+                        style={[
+                          styles.prayerPunjabiText,
+                          {
+                            fontFamily: "serif",
+                            opacity: primaryLanguage === "punjabi" ? 1 : 0.7,
+                            marginTop: primaryLanguage === "punjabi" ? 0 : 4
+                          }
+                        ]}
+                      >
+                        {line.punjabi}
+                      </ThemedText>
+                    )}
+
+                    {/* Transliteration */}
+                    {showTransliteration && transliterationText && (
+                      <ThemedText
+                        style={[
+                          styles.prayerTransliterationText,
+                          { color: theme.icon }
+                        ]}
+                      >
+                        {transliterationText}
+                      </ThemedText>
+                    )}
+
+                    {/* Translation */}
+                    {shouldShowTranslation && (
+                      <ThemedText
+                        style={[
+                          styles.prayerEnglishText,
+                          { color: theme.icon }
+                        ]}
+                      >
+                        {translationText}
+                      </ThemedText>
+                    )}
+
+                    {index < selectedPrayer.lines.length - 1 && (
+                      <View
+                        style={[
+                          styles.prayerSeparator,
+                          { backgroundColor: theme.icon + "20" }
+                        ]}
+                      />
+                    )}
+                  </View>
+                );
+              })}
             </ScrollView>
           </ThemedView>
         )}
@@ -384,6 +524,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontStyle: "italic",
     marginTop: 4
+  },
+  prayerPrimaryText: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 8,
+    textAlign: "left"
   },
   prayerSeparator: {
     height: 1,
