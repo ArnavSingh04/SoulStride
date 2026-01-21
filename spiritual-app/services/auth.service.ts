@@ -1,0 +1,159 @@
+import { supabase } from '@/lib/supabase';
+import type { User, Session, AuthError } from '@supabase/supabase-js';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name?: string;
+  avatar_url?: string;
+}
+
+export interface SignUpData {
+  email: string;
+  password: string;
+  name?: string;
+}
+
+export interface SignInData {
+  email: string;
+  password: string;
+}
+
+// Sign up with email and password
+export async function signUp(data: SignUpData): Promise<{ user: User | null; error: AuthError | null }> {
+  try {
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          name: data.name || '',
+        },
+      },
+    });
+
+    if (error) {
+      return { user: null, error };
+    }
+
+    return { user: authData.user, error: null };
+  } catch (error) {
+    return { 
+      user: null, 
+      error: error as AuthError 
+    };
+  }
+}
+
+// Sign in with email and password
+export async function signIn(data: SignInData): Promise<{ user: User | null; error: AuthError | null }> {
+  try {
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    });
+
+    if (error) {
+      return { user: null, error };
+    }
+
+    // Check if email is verified
+    if (authData.user && !authData.user.email_confirmed_at) {
+      // Sign out the user if email is not verified
+      await supabase.auth.signOut();
+      return { 
+        user: null, 
+        error: {
+          name: 'EmailNotConfirmed',
+          message: 'Please verify your email before signing in. Check your inbox for the verification link.',
+        } as AuthError
+      };
+    }
+
+    return { user: authData.user, error: null };
+  } catch (error) {
+    return { 
+      user: null, 
+      error: error as AuthError 
+    };
+  }
+}
+
+// Sign out
+export async function signOut(): Promise<{ error: AuthError | null }> {
+  try {
+    const { error } = await supabase.auth.signOut();
+    return { error };
+  } catch (error) {
+    return { error: error as AuthError };
+  }
+}
+
+// Get current session
+export async function getSession(): Promise<Session | null> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Error getting session:', error);
+      return null;
+    }
+    return session;
+  } catch (error) {
+    console.error('Error getting session:', error);
+    return null;
+  }
+}
+
+// Get current user
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Error getting user:', error);
+      return null;
+    }
+    return user;
+  } catch (error) {
+    console.error('Error getting user:', error);
+    return null;
+  }
+}
+
+// Update user profile
+export async function updateUserProfile(updates: {
+  name?: string;
+  avatar_url?: string;
+}): Promise<{ error: AuthError | null }> {
+  try {
+    const { error } = await supabase.auth.updateUser({
+      data: updates,
+    });
+    return { error };
+  } catch (error) {
+    return { error: error as AuthError };
+  }
+}
+
+// Reset password
+export async function resetPassword(email: string): Promise<{ error: AuthError | null }> {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'soulstride://reset-password',
+    });
+    return { error };
+  } catch (error) {
+    return { error: error as AuthError };
+  }
+}
+
+// Convert Supabase User to AuthUser
+export function userToAuthUser(user: User | null): AuthUser | null {
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    email: user.email || '',
+    name: user.user_metadata?.name || undefined,
+    avatar_url: user.user_metadata?.avatar_url || undefined,
+  };
+}

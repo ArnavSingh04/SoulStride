@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -15,6 +15,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import GuruGranthSahibReader from "@/components/guru-granth-sahib-reader";
 import PrayerList from "@/components/prayer-list";
+import { loadPrayerPreferences } from "@/services/prayer-preferences";
 
 const { width } = Dimensions.get("window");
 
@@ -22,6 +23,29 @@ export default function Prayers() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const [showGuruGranthSahib, setShowGuruGranthSahib] = useState(false);
+  const [selectedHolyBookIds, setSelectedHolyBookIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    loadPreferences();
+    // Reload preferences periodically to catch changes from settings
+    const interval = setInterval(() => {
+      loadPreferences();
+    }, 2000); // Check every 2 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadPreferences = async () => {
+    try {
+      const prefs = await loadPrayerPreferences();
+      setSelectedHolyBookIds(prefs?.selectedHolyBookIds || []);
+    } catch (error) {
+      console.error("Error loading preferences:", error);
+    }
+  };
+
+  // Show GGS card only if GGS is selected or no books are selected (default behavior)
+  const showGGSCard = selectedHolyBookIds.length === 0 || selectedHolyBookIds.includes('guru-granth-sahib');
 
   return (
     <ThemedView style={styles.container}>
@@ -40,37 +64,39 @@ export default function Prayers() {
           </ThemedText>
         </View>
 
-        {/* Guru Granth Sahib Card */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => setShowGuruGranthSahib(true)}
-          style={styles.guruGranthSahibCard}
-        >
-          <LinearGradient
-            colors={["#7C3AED", "#5B21B6"]}
-            start={[0, 0]}
-            end={[1, 1]}
-            style={styles.gradientCard}
+        {/* Guru Granth Sahib Card - Only show if GGS is selected */}
+        {showGGSCard && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setShowGuruGranthSahib(true)}
+            style={styles.guruGranthSahibCard}
           >
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}>
-                <Ionicons name="book" size={32} color="#fff" />
+            <LinearGradient
+              colors={["#7C3AED", "#5B21B6"]}
+              start={[0, 0]}
+              end={[1, 1]}
+              style={styles.gradientCard}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.cardIconContainer}>
+                  <Ionicons name="book" size={32} color="#fff" />
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <ThemedText style={styles.cardTitle}>
+                    Guru Granth Sahib Ji
+                  </ThemedText>
+                  <ThemedText style={styles.cardTitlePunjabi}>
+                    ਗੁਰੂ ਗ੍ਰੰਥ ਸਾਹਿਬ ਜੀ
+                  </ThemedText>
+                  <ThemedText style={styles.cardSubtitle}>
+                    Read page by page with meanings
+                  </ThemedText>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#fff" />
               </View>
-              <View style={styles.cardTextContainer}>
-                <ThemedText style={styles.cardTitle}>
-                  Guru Granth Sahib Ji
-                </ThemedText>
-                <ThemedText style={styles.cardTitlePunjabi}>
-                  ਗੁਰੂ ਗ੍ਰੰਥ ਸਾਹਿਬ ਜੀ
-                </ThemedText>
-                <ThemedText style={styles.cardSubtitle}>
-                  Read page by page with meanings
-                </ThemedText>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color="#fff" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         {/* Section Divider */}
         <View style={styles.sectionDivider}>

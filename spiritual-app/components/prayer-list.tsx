@@ -48,6 +48,13 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
     loadPreferences();
   }, []);
 
+  // Reload prayers when preferences change (especially holy book selection)
+  useEffect(() => {
+    if (preferences) {
+      loadPrayers();
+    }
+  }, [preferences?.selectedHolyBookIds]);
+
   const loadPreferences = async () => {
     try {
       const prefs = await loadPrayerPreferences();
@@ -79,7 +86,25 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   const loadPrayers = async () => {
     setLoading(true);
     try {
-      const prayers = await getAllPrayers();
+      // Get user's selected holy books
+      const prefs = await loadPrayerPreferences();
+      const selectedHolyBookIds = prefs?.selectedHolyBookIds || [];
+
+      let prayers: PrayerWithLines[] = [];
+
+      if (selectedHolyBookIds.length > 0) {
+        // Load prayers from each selected holy book
+        const prayerPromises = selectedHolyBookIds.map((holyBookId) =>
+          getAllPrayers(holyBookId)
+        );
+        const prayerArrays = await Promise.all(prayerPromises);
+        // Flatten the arrays and combine
+        prayers = prayerArrays.flat();
+      } else {
+        // If no holy books selected, load all prayers
+        prayers = await getAllPrayers();
+      }
+
       // Sort prayers by custom order, then alphabetically for others
       const sortedPrayers = [...prayers].sort((a, b) => {
         const orderA = getPrayerOrder(a.name);
@@ -101,7 +126,25 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   const searchPrayersData = async (query: string) => {
     setLoading(true);
     try {
-      const results = await searchPrayersDB(query);
+      // Get user's selected holy books
+      const prefs = await loadPrayerPreferences();
+      const selectedHolyBookIds = prefs?.selectedHolyBookIds || [];
+
+      let results: PrayerWithLines[] = [];
+
+      if (selectedHolyBookIds.length > 0) {
+        // Search in each selected holy book
+        const searchPromises = selectedHolyBookIds.map((holyBookId) =>
+          searchPrayersDB(query, holyBookId)
+        );
+        const searchArrays = await Promise.all(searchPromises);
+        // Flatten and combine results
+        results = searchArrays.flat();
+      } else {
+        // If no holy books selected, search all
+        results = await searchPrayersDB(query);
+      }
+
       setFilteredPrayers(results);
     } catch (error) {
       console.error("Error searching prayers:", error);

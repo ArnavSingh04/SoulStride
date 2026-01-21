@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Switch,
-  TouchableOpacity
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@/components/themed-text";
@@ -15,27 +16,36 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   loadPrayerPreferences,
   savePrayerPreferences,
-  updatePrayerPreference,
   type PrayerPreferences,
   type PrayerLanguage
 } from "@/services/prayer-preferences";
+import { useAuth } from "@/contexts/AuthContext";
+import { router } from "expo-router";
+import { getAllHolyBooks } from "@/lib/database.service";
+import type { HolyBook } from "@/lib/database.types";
 
 export default function Settings() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
+  const { user, signOut, loading: authLoading } = useAuth();
   const [preferences, setPreferences] = useState<PrayerPreferences | null>(null);
+  const [holyBooks, setHolyBooks] = useState<HolyBook[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPreferences();
+    loadData();
   }, []);
 
-  const loadPreferences = async () => {
+  const loadData = async () => {
     try {
-      const prefs = await loadPrayerPreferences();
+      const [prefs, books] = await Promise.all([
+        loadPrayerPreferences(),
+        getAllHolyBooks()
+      ]);
       setPreferences(prefs);
+      setHolyBooks(books);
     } catch (error) {
-      console.error("Error loading preferences:", error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
@@ -53,7 +63,6 @@ export default function Settings() {
       await savePrayerPreferences(updated);
     } catch (error) {
       console.error("Error saving preferences:", error);
-      // Revert on error
       setPreferences(preferences);
     }
   };
@@ -66,11 +75,47 @@ export default function Settings() {
     await handlePreferenceChange("translationLanguage", language);
   };
 
-  if (loading || !preferences) {
+  const handleHolyBookToggle = async (holyBookId: string) => {
+    if (!preferences) return;
+    
+    const currentIds = preferences.selectedHolyBookIds || [];
+    const isSelected = currentIds.includes(holyBookId);
+    
+    let updatedIds: string[];
+    if (isSelected) {
+      // Remove from selection
+      updatedIds = currentIds.filter(id => id !== holyBookId);
+    } else {
+      // Add to selection
+      updatedIds = [...currentIds, holyBookId];
+    }
+    
+    await handlePreferenceChange("selectedHolyBookIds", updatedIds);
+  };
+
+  const handleSignOut = async () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            await signOut();
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading || authLoading || !preferences) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ThemedText>Loading settings...</ThemedText>
+          <ActivityIndicator size="large" color={theme.tint} />
+          <ThemedText style={{ marginTop: 12 }}>Loading settings...</ThemedText>
         </View>
       </ThemedView>
     );
@@ -92,42 +137,181 @@ export default function Settings() {
             </ThemedText>
           </View>
           
-          <View
-            style={[
-              styles.profileCard,
-              {
-                backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
-              }
-            ]}
-          >
-            <View style={styles.profileInfo}>
-              <View
+          {user ? (
+            <View
+              style={[
+                styles.profileCard,
+                {
+                  backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
+                }
+              ]}
+            >
+              <View style={styles.profileInfo}>
+                <View
+                  style={[
+                    styles.avatar,
+                    { backgroundColor: theme.tint + "20" }
+                  ]}
+                >
+                  <Ionicons name="person" size={32} color={theme.tint} />
+                </View>
+                <View style={styles.profileDetails}>
+                  <ThemedText type="defaultSemiBold" style={styles.profileName}>
+                    {user.name || "User"}
+                  </ThemedText>
+                  <ThemedText style={[styles.profileEmail, { color: theme.icon }]}>
+                    {user.email}
+                  </ThemedText>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={handleSignOut}
                 style={[
-                  styles.avatar,
+                  styles.signOutButton,
                   { backgroundColor: theme.tint + "20" }
                 ]}
               >
-                <Ionicons name="person" size={32} color={theme.tint} />
-              </View>
-              <View style={styles.profileDetails}>
-                <ThemedText type="defaultSemiBold" style={styles.profileName}>
-                  User
-                </ThemedText>
-                <ThemedText style={[styles.profileEmail, { color: theme.icon }]}>
-                  user@soulstride.app
-                </ThemedText>
-              </View>
+                <Ionicons name="log-out-outline" size={18} color={theme.tint} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
+          ) : (
+            <View
               style={[
-                styles.editButton,
-                { backgroundColor: theme.tint + "20" }
+                styles.profileCard,
+                {
+                  backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
+                }
               ]}
             >
-              <Ionicons name="pencil" size={18} color={theme.tint} />
-            </TouchableOpacity>
-          </View>
+              <View style={styles.profileInfo}>
+                <View
+                  style={[
+                    styles.avatar,
+                    { backgroundColor: theme.tint + "20" }
+                  ]}
+                >
+                  <Ionicons name="person-outline" size={32} color={theme.tint} />
+                </View>
+                <View style={styles.profileDetails}>
+                  <ThemedText type="defaultSemiBold" style={styles.profileName}>
+                    Guest User
+                  </ThemedText>
+                  <ThemedText style={[styles.profileEmail, { color: theme.icon }]}>
+                    Sign in to sync your preferences
+                  </ThemedText>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {!user && (
+            <View style={styles.authButtons}>
+              <TouchableOpacity
+                style={[styles.authButton, { backgroundColor: theme.tint }]}
+                onPress={() => router.push("/auth/login")}
+              >
+                <ThemedText style={styles.authButtonText}>Sign In</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.authButton,
+                  styles.authButtonSecondary,
+                  {
+                    backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
+                    borderColor: theme.tint,
+                    borderWidth: 1
+                  }
+                ]}
+                onPress={() => router.push("/auth/signup")}
+              >
+                <ThemedText style={[styles.authButtonTextSecondary, { color: theme.tint }]}>
+                  Sign Up
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+
+        {/* Faith / Holy Book Selection */}
+        {holyBooks.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="book-outline" size={24} color={theme.tint} />
+              <ThemedText type="title" style={styles.sectionTitle}>
+                Faith & Holy Book
+              </ThemedText>
+            </View>
+            <View style={styles.settingCard}>
+              <View style={styles.settingHeader}>
+                <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
+                  Select Your Faith
+                </ThemedText>
+                <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+                  Select one or more holy books to learn from
+                </ThemedText>
+              </View>
+              <View style={styles.holyBookList}>
+                {holyBooks.map((book) => {
+                  const currentIds = preferences.selectedHolyBookIds || [];
+                  const isSelected = currentIds.includes(book.id);
+                  
+                  return (
+                    <TouchableOpacity
+                      key={book.id}
+                      onPress={() => handleHolyBookToggle(book.id)}
+                      style={[
+                        styles.holyBookItem,
+                        {
+                          backgroundColor: colorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f0f0f0",
+                          borderColor: isSelected
+                            ? (colorScheme === "dark" ? "#4a4a4a" : theme.tint)
+                            : "rgba(128, 128, 128, 0.3)",
+                          borderWidth: 2
+                        }
+                      ]}
+                    >
+                      <View style={styles.holyBookCheckbox}>
+                        <Ionicons
+                          name={isSelected ? "checkbox" : "square-outline"}
+                          size={24}
+                          color={isSelected ? theme.tint : theme.icon}
+                        />
+                      </View>
+                      <View style={styles.holyBookInfo}>
+                        <ThemedText
+                          type="defaultSemiBold"
+                          style={[
+                            styles.holyBookName,
+                            {
+                              color: theme.text
+                            }
+                          ]}
+                        >
+                          {book.name}
+                        </ThemedText>
+                        {book.name_punjabi && (
+                          <ThemedText
+                            style={[
+                              styles.holyBookNamePunjabi,
+                              {
+                                color: theme.icon,
+                                opacity: 0.7
+                              }
+                            ]}
+                          >
+                            {book.name_punjabi}
+                          </ThemedText>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Prayer Display Settings */}
         <View style={styles.section}>
@@ -151,11 +335,9 @@ export default function Settings() {
             <View style={styles.languageButtons}>
               {(["punjabi", "english", "hindi"] as PrayerLanguage[]).map((lang) => {
                 const isSelected = preferences.primaryLanguage === lang;
-                // Use a darker shade for selected button in dark mode to ensure text visibility
                 const selectedBgColor = colorScheme === "dark" 
-                  ? "#4a4a4a" // Darker gray for dark mode
-                  : theme.tint; // Use tint for light mode
-                // Text color: white for selected in light mode, white for selected in dark mode (on dark bg)
+                  ? "#4a4a4a"
+                  : theme.tint;
                 const textColor = isSelected 
                   ? "#fff"
                   : theme.text;
@@ -259,10 +441,9 @@ export default function Settings() {
                 <View style={styles.languageButtons}>
                   {(["english", "hindi"] as const).map((lang) => {
                     const isSelected = preferences.translationLanguage === lang;
-                    // Use a darker shade for selected button in dark mode
                     const selectedBgColor = colorScheme === "dark" 
-                      ? "#4a4a4a" // Darker gray for dark mode
-                      : theme.tint; // Use tint for light mode
+                      ? "#4a4a4a"
+                      : theme.tint;
                     const textColor = isSelected 
                       ? "#fff"
                       : theme.text;
@@ -373,7 +554,8 @@ const styles = StyleSheet.create({
     padding: 20,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    marginBottom: 12
   },
   profileInfo: {
     flexDirection: "row",
@@ -398,12 +580,36 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 14
   },
-  editButton: {
+  signOutButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center"
+  },
+  authButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12
+  },
+  authButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  authButtonSecondary: {
+    backgroundColor: "transparent"
+  },
+  authButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600"
+  },
+  authButtonTextSecondary: {
+    fontSize: 16,
+    fontWeight: "600"
   },
   settingCard: {
     borderRadius: 12,
@@ -465,5 +671,28 @@ const styles = StyleSheet.create({
   subLabel: {
     fontSize: 13,
     marginBottom: 8
+  },
+  holyBookList: {
+    marginTop: 12,
+    gap: 8
+  },
+  holyBookItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12
+  },
+  holyBookCheckbox: {
+    marginRight: 12
+  },
+  holyBookInfo: {
+    flex: 1
+  },
+  holyBookName: {
+    fontSize: 16,
+    marginBottom: 4
+  },
+  holyBookNamePunjabi: {
+    fontSize: 14
   }
 });

@@ -11,6 +11,7 @@ export interface PrayerPreferences {
   showTranslation: boolean;
   showTransliteration: boolean;
   translationLanguage?: 'english' | 'hindi'; // Which translation to show if showTranslation is true
+  selectedHolyBookIds?: string[]; // User's selected holy books/faith (can select multiple)
 }
 
 // Default preferences
