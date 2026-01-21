@@ -6,7 +6,8 @@
 import { Platform } from 'react-native';
 
 const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+// Avoid pure-white tint in dark mode (causes unreadable buttons)
+const tintColorDark = '#7C3AED';
 
 export const Colors = {
   light: {

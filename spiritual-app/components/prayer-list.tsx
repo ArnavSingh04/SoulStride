@@ -28,9 +28,13 @@ import {
 
 interface PrayerListProps {
   onPrayerSelect?: (prayer: PrayerWithLines) => void;
+  selectedHolyBookIds?: string[];
 }
 
-export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
+export default function PrayerList({
+  onPrayerSelect,
+  selectedHolyBookIds
+}: PrayerListProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,7 +48,6 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   );
 
   useEffect(() => {
-    loadPrayers();
     loadPreferences();
   }, []);
 
@@ -53,7 +56,15 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
     if (preferences) {
       loadPrayers();
     }
-  }, [preferences?.selectedHolyBookIds]);
+  }, [preferences?.selectedHolyBookIds, selectedHolyBookIds]);
+
+  // Also reload prayers immediately when parent passes selection
+  useEffect(() => {
+    if (selectedHolyBookIds) {
+      loadPrayers(selectedHolyBookIds);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHolyBookIds?.join("|")]);
 
   const loadPreferences = async () => {
     try {
@@ -83,26 +94,24 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
     return 99; // Other prayers come after
   };
 
-  const loadPrayers = async () => {
+  const loadPrayers = async (overrideHolyBookIds?: string[]) => {
     setLoading(true);
     try {
-      // Get user's selected holy books
-      const prefs = await loadPrayerPreferences();
-      const selectedHolyBookIds = prefs?.selectedHolyBookIds || [];
+      const ids = overrideHolyBookIds ?? preferences?.selectedHolyBookIds ?? [];
 
       let prayers: PrayerWithLines[] = [];
 
-      if (selectedHolyBookIds.length > 0) {
+      if (ids.length > 0) {
         // Load prayers from each selected holy book
-        const prayerPromises = selectedHolyBookIds.map((holyBookId) =>
+        const prayerPromises = ids.map((holyBookId) =>
           getAllPrayers(holyBookId)
         );
         const prayerArrays = await Promise.all(prayerPromises);
         // Flatten the arrays and combine
         prayers = prayerArrays.flat();
       } else {
-        // If no holy books selected, load all prayers
-        prayers = await getAllPrayers();
+        // If no holy books selected, show nothing (Prayers page will prompt)
+        prayers = [];
       }
 
       // Sort prayers by custom order, then alphabetically for others
@@ -126,23 +135,21 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
   const searchPrayersData = async (query: string) => {
     setLoading(true);
     try {
-      // Get user's selected holy books
-      const prefs = await loadPrayerPreferences();
-      const selectedHolyBookIds = prefs?.selectedHolyBookIds || [];
+      const ids = selectedHolyBookIds ?? preferences?.selectedHolyBookIds ?? [];
 
       let results: PrayerWithLines[] = [];
 
-      if (selectedHolyBookIds.length > 0) {
+      if (ids.length > 0) {
         // Search in each selected holy book
-        const searchPromises = selectedHolyBookIds.map((holyBookId) =>
+        const searchPromises = ids.map((holyBookId) =>
           searchPrayersDB(query, holyBookId)
         );
         const searchArrays = await Promise.all(searchPromises);
         // Flatten and combine results
         results = searchArrays.flat();
       } else {
-        // If no holy books selected, search all
-        results = await searchPrayersDB(query);
+        // If no holy books selected, show nothing
+        results = [];
       }
 
       setFilteredPrayers(results);
@@ -248,7 +255,9 @@ export default function PrayerList({ onPrayerSelect }: PrayerListProps) {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <ThemedText style={[styles.emptyText, { color: theme.icon }]}>
-                No prayers found
+                {preferences?.selectedHolyBookIds?.length
+                  ? "No prayers found"
+                  : "Select a holy book in Settings to view prayers"}
               </ThemedText>
             </View>
           }

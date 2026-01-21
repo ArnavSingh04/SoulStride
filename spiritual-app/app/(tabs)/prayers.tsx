@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -16,6 +16,8 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import GuruGranthSahibReader from "@/components/guru-granth-sahib-reader";
 import PrayerList from "@/components/prayer-list";
 import { loadPrayerPreferences } from "@/services/prayer-preferences";
+import { router } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
@@ -27,13 +29,13 @@ export default function Prayers() {
 
   useEffect(() => {
     loadPreferences();
-    // Reload preferences periodically to catch changes from settings
-    const interval = setInterval(() => {
-      loadPreferences();
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(interval);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPreferences();
+    }, [])
+  );
 
   const loadPreferences = async () => {
     try {
@@ -44,12 +46,12 @@ export default function Prayers() {
     }
   };
 
-  // Show GGS card only if GGS is selected or no books are selected (default behavior)
-  const showGGSCard = selectedHolyBookIds.length === 0 || selectedHolyBookIds.includes('guru-granth-sahib');
+  const hasHolyBookSelection = selectedHolyBookIds.length > 0;
+  const showGGSCard = selectedHolyBookIds.includes("guru-granth-sahib");
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -64,8 +66,32 @@ export default function Prayers() {
           </ThemedText>
         </View>
 
-        {/* Guru Granth Sahib Card - Only show if GGS is selected */}
-        {showGGSCard && (
+        {/* If no holy book selected, prompt user */}
+        {!hasHolyBookSelection ? (
+          <View style={styles.selectPromptCard}>
+            <View style={styles.selectPromptHeader}>
+              <Ionicons name="alert-circle-outline" size={22} color={theme.icon} />
+              <ThemedText type="defaultSemiBold" style={styles.selectPromptTitle}>
+                Select a holy book to continue
+              </ThemedText>
+            </View>
+            <ThemedText style={[styles.selectPromptSubtitle, { color: theme.icon }]}>
+              Go to Settings and choose one or more holy books to load prayers.
+            </ThemedText>
+            <TouchableOpacity
+              style={[
+                styles.selectPromptButton,
+                { backgroundColor: colorScheme === "dark" ? "#4a4a4a" : theme.tint }
+              ]}
+              onPress={() => router.navigate("/(tabs)/profile")}
+            >
+              <ThemedText style={styles.selectPromptButtonText}>Open Settings</ThemedText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* Guru Granth Sahib Card - Only show if GGS is selected */}
+            {showGGSCard && (
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setShowGuruGranthSahib(true)}
@@ -96,7 +122,7 @@ export default function Prayers() {
               </View>
             </LinearGradient>
           </TouchableOpacity>
-        )}
+            )}
 
         {/* Section Divider */}
         <View style={styles.sectionDivider}>
@@ -116,8 +142,10 @@ export default function Prayers() {
 
         {/* Prayer List */}
         <View style={styles.prayerListContainer}>
-          <PrayerList />
+          <PrayerList selectedHolyBookIds={selectedHolyBookIds} />
         </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Guru Granth Sahib Reader Modal */}
@@ -215,5 +243,37 @@ const styles = StyleSheet.create({
   },
   prayerListContainer: {
     minHeight: 400
+  },
+  selectPromptCard: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: "rgba(128, 128, 128, 0.12)"
+  },
+  selectPromptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10
+  },
+  selectPromptTitle: {
+    fontSize: 16
+  },
+  selectPromptSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14
+  },
+  selectPromptButton: {
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  selectPromptButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600"
   }
 });

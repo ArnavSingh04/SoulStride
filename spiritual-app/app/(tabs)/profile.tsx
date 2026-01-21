@@ -23,13 +23,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { router } from "expo-router";
 import { getAllHolyBooks } from "@/lib/database.service";
 import type { HolyBook } from "@/lib/database.types";
+import { loadUserProfile } from "@/services/user-profile";
+import { useThemePreference, type ThemeMode } from "@/contexts/ThemePreferenceContext";
 
 export default function Settings() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const { user, signOut, loading: authLoading } = useAuth();
-  const [preferences, setPreferences] = useState<PrayerPreferences | null>(null);
+  const { mode, setMode } = useThemePreference();
+  const [preferences, setPreferences] = useState<PrayerPreferences | null>(
+    null
+  );
   const [holyBooks, setHolyBooks] = useState<HolyBook[]>([]);
+  const [localName, setLocalName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,12 +44,14 @@ export default function Settings() {
 
   const loadData = async () => {
     try {
-      const [prefs, books] = await Promise.all([
+      const [prefs, books, profile] = await Promise.all([
         loadPrayerPreferences(),
-        getAllHolyBooks()
+        getAllHolyBooks(),
+        loadUserProfile()
       ]);
       setPreferences(prefs);
       setHolyBooks(books);
+      setLocalName(profile?.name || "");
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -56,7 +64,7 @@ export default function Settings() {
     value: PrayerPreferences[K]
   ) => {
     if (!preferences) return;
-    
+
     const updated = { ...preferences, [key]: value };
     setPreferences(updated);
     try {
@@ -71,43 +79,41 @@ export default function Settings() {
     await handlePreferenceChange("primaryLanguage", language);
   };
 
-  const handleTranslationLanguageSelect = async (language: "english" | "hindi") => {
+  const handleTranslationLanguageSelect = async (
+    language: "english" | "hindi"
+  ) => {
     await handlePreferenceChange("translationLanguage", language);
   };
 
   const handleHolyBookToggle = async (holyBookId: string) => {
     if (!preferences) return;
-    
+
     const currentIds = preferences.selectedHolyBookIds || [];
     const isSelected = currentIds.includes(holyBookId);
-    
+
     let updatedIds: string[];
     if (isSelected) {
       // Remove from selection
-      updatedIds = currentIds.filter(id => id !== holyBookId);
+      updatedIds = currentIds.filter((id) => id !== holyBookId);
     } else {
       // Add to selection
       updatedIds = [...currentIds, holyBookId];
     }
-    
+
     await handlePreferenceChange("selectedHolyBookIds", updatedIds);
   };
 
   const handleSignOut = async () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: async () => {
-            await signOut();
-          },
-        },
-      ]
-    );
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          await signOut();
+        }
+      }
+    ]);
   };
 
   if (loading || authLoading || !preferences) {
@@ -128,6 +134,52 @@ export default function Settings() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Appearance */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="color-palette-outline" size={24} color={theme.tint} />
+            <ThemedText type="title" style={styles.sectionTitle}>
+              Appearance
+            </ThemedText>
+          </View>
+
+          <View style={styles.settingCard}>
+            <View style={styles.settingHeader}>
+              <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
+                Theme
+              </ThemedText>
+              <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+                Choose light, dark, or follow your device
+              </ThemedText>
+            </View>
+
+            <View style={styles.themeButtons}>
+              {(["system", "light", "dark"] as ThemeMode[]).map((m) => {
+                const selected = mode === m;
+                const bg = selected
+                  ? colorScheme === "dark"
+                    ? "#4a4a4a"
+                    : theme.tint
+                  : colorScheme === "dark"
+                  ? "#2a2a2a"
+                  : "#f0f0f0";
+                const text = selected ? "#fff" : theme.text;
+                return (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setMode(m)}
+                    style={[styles.themeButton, { backgroundColor: bg }]}
+                  >
+                    <ThemedText style={{ color: text, fontWeight: selected ? "700" : "500" }}>
+                      {m.charAt(0).toUpperCase() + m.slice(1)}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
         {/* Profile Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -136,13 +188,14 @@ export default function Settings() {
               Profile
             </ThemedText>
           </View>
-          
+
           {user ? (
             <View
               style={[
                 styles.profileCard,
                 {
-                  backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
+                  backgroundColor:
+                    colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
                 }
               ]}
             >
@@ -159,7 +212,9 @@ export default function Settings() {
                   <ThemedText type="defaultSemiBold" style={styles.profileName}>
                     {user.name || "User"}
                   </ThemedText>
-                  <ThemedText style={[styles.profileEmail, { color: theme.icon }]}>
+                  <ThemedText
+                    style={[styles.profileEmail, { color: theme.icon }]}
+                  >
                     {user.email}
                   </ThemedText>
                 </View>
@@ -179,7 +234,8 @@ export default function Settings() {
               style={[
                 styles.profileCard,
                 {
-                  backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
+                  backgroundColor:
+                    colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
                 }
               ]}
             >
@@ -190,14 +246,22 @@ export default function Settings() {
                     { backgroundColor: theme.tint + "20" }
                   ]}
                 >
-                  <Ionicons name="person-outline" size={32} color={theme.tint} />
+                  <Ionicons
+                    name="person-outline"
+                    size={32}
+                    color={theme.tint}
+                  />
                 </View>
                 <View style={styles.profileDetails}>
                   <ThemedText type="defaultSemiBold" style={styles.profileName}>
-                    Guest User
+                    {localName?.trim() ? localName.trim() : "Guest User"}
                   </ThemedText>
-                  <ThemedText style={[styles.profileEmail, { color: theme.icon }]}>
-                    Sign in to sync your preferences
+                  <ThemedText
+                    style={[styles.profileEmail, { color: theme.icon }]}
+                  >
+                    {localName?.trim()
+                      ? "You can sign in to sync your preferences"
+                      : "Sign in to sync your preferences"}
                   </ThemedText>
                 </View>
               </View>
@@ -207,7 +271,10 @@ export default function Settings() {
           {!user && (
             <View style={styles.authButtons}>
               <TouchableOpacity
-                style={[styles.authButton, { backgroundColor: theme.tint }]}
+                style={[
+                  styles.authButton,
+                  { backgroundColor: colorScheme === "dark" ? "#4a4a4a" : theme.tint }
+                ]}
                 onPress={() => router.push("/auth/login")}
               >
                 <ThemedText style={styles.authButtonText}>Sign In</ThemedText>
@@ -217,14 +284,20 @@ export default function Settings() {
                   styles.authButton,
                   styles.authButtonSecondary,
                   {
-                    backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
+                    backgroundColor:
+                      colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
                     borderColor: theme.tint,
                     borderWidth: 1
                   }
                 ]}
                 onPress={() => router.push("/auth/signup")}
               >
-                <ThemedText style={[styles.authButtonTextSecondary, { color: theme.tint }]}>
+                <ThemedText
+                  style={[
+                    styles.authButtonTextSecondary,
+                    { color: theme.tint }
+                  ]}
+                >
                   Sign Up
                 </ThemedText>
               </TouchableOpacity>
@@ -246,7 +319,9 @@ export default function Settings() {
                 <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
                   Select Your Faith
                 </ThemedText>
-                <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+                <ThemedText
+                  style={[styles.settingDescription, { color: theme.icon }]}
+                >
                   Select one or more holy books to learn from
                 </ThemedText>
               </View>
@@ -254,7 +329,7 @@ export default function Settings() {
                 {holyBooks.map((book) => {
                   const currentIds = preferences.selectedHolyBookIds || [];
                   const isSelected = currentIds.includes(book.id);
-                  
+
                   return (
                     <TouchableOpacity
                       key={book.id}
@@ -262,11 +337,12 @@ export default function Settings() {
                       style={[
                         styles.holyBookItem,
                         {
-                          backgroundColor: colorScheme === "dark"
-                            ? "#2a2a2a"
-                            : "#f0f0f0",
+                          backgroundColor:
+                            colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
                           borderColor: isSelected
-                            ? (colorScheme === "dark" ? "#4a4a4a" : theme.tint)
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
                             : "rgba(128, 128, 128, 0.3)",
                           borderWidth: 2
                         }
@@ -328,52 +404,55 @@ export default function Settings() {
               <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
                 Primary Language
               </ThemedText>
-              <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+              <ThemedText
+                style={[styles.settingDescription, { color: theme.icon }]}
+              >
                 Choose the main language for prayer content
               </ThemedText>
             </View>
             <View style={styles.languageButtons}>
-              {(["punjabi", "english", "hindi"] as PrayerLanguage[]).map((lang) => {
-                const isSelected = preferences.primaryLanguage === lang;
-                const selectedBgColor = colorScheme === "dark" 
-                  ? "#4a4a4a"
-                  : theme.tint;
-                const textColor = isSelected 
-                  ? "#fff"
-                  : theme.text;
-                
-                return (
-                  <TouchableOpacity
-                    key={lang}
-                    onPress={() => handleLanguageSelect(lang)}
-                    style={[
-                      styles.languageButton,
-                      {
-                        backgroundColor: isSelected
-                          ? selectedBgColor
-                          : colorScheme === "dark"
-                          ? "#2a2a2a"
-                          : "#f0f0f0",
-                        borderColor: isSelected
-                          ? (colorScheme === "dark" ? "#4a4a4a" : theme.tint)
-                          : "transparent"
-                      }
-                    ]}
-                  >
-                    <ThemedText
+              {(["punjabi", "english", "hindi"] as PrayerLanguage[]).map(
+                (lang) => {
+                  const isSelected = preferences.primaryLanguage === lang;
+                  const selectedBgColor =
+                    colorScheme === "dark" ? "#4a4a4a" : theme.tint;
+                  const textColor = isSelected ? "#fff" : theme.text;
+
+                  return (
+                    <TouchableOpacity
+                      key={lang}
+                      onPress={() => handleLanguageSelect(lang)}
                       style={[
-                        styles.languageButtonText,
+                        styles.languageButton,
                         {
-                          color: textColor,
-                          fontWeight: isSelected ? "600" : "400"
+                          backgroundColor: isSelected
+                            ? selectedBgColor
+                            : colorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f0f0f0",
+                          borderColor: isSelected
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : "transparent"
                         }
                       ]}
                     >
-                      {lang.charAt(0).toUpperCase() + lang.slice(1)}
-                    </ThemedText>
-                  </TouchableOpacity>
-                );
-              })}
+                      <ThemedText
+                        style={[
+                          styles.languageButtonText,
+                          {
+                            color: textColor,
+                            fontWeight: isSelected ? "600" : "400"
+                          }
+                        ]}
+                      >
+                        {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                }
+              )}
             </View>
           </View>
 
@@ -391,7 +470,9 @@ export default function Settings() {
                 <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
                   Show Original Text
                 </ThemedText>
-                <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+                <ThemedText
+                  style={[styles.settingDescription, { color: theme.icon }]}
+                >
                   Display the original Punjabi text
                 </ThemedText>
               </View>
@@ -400,7 +481,10 @@ export default function Settings() {
                 onValueChange={(value) =>
                   handlePreferenceChange("showOriginal", value)
                 }
-                trackColor={{ false: theme.icon + "40", true: theme.tint + "80" }}
+                trackColor={{
+                  false: theme.icon + "40",
+                  true: theme.tint + "80"
+                }}
                 thumbColor={preferences.showOriginal ? theme.tint : "#f4f3f4"}
               />
             </View>
@@ -419,7 +503,9 @@ export default function Settings() {
                 <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
                   Show Translation
                 </ThemedText>
-                <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+                <ThemedText
+                  style={[styles.settingDescription, { color: theme.icon }]}
+                >
                   Display translated text
                 </ThemedText>
               </View>
@@ -428,11 +514,16 @@ export default function Settings() {
                 onValueChange={(value) =>
                   handlePreferenceChange("showTranslation", value)
                 }
-                trackColor={{ false: theme.icon + "40", true: theme.tint + "80" }}
-                thumbColor={preferences.showTranslation ? theme.tint : "#f4f3f4"}
+                trackColor={{
+                  false: theme.icon + "40",
+                  true: theme.tint + "80"
+                }}
+                thumbColor={
+                  preferences.showTranslation ? theme.tint : "#f4f3f4"
+                }
               />
             </View>
-            
+
             {preferences.showTranslation && (
               <View style={styles.translationLanguageContainer}>
                 <ThemedText style={[styles.subLabel, { color: theme.icon }]}>
@@ -441,13 +532,10 @@ export default function Settings() {
                 <View style={styles.languageButtons}>
                   {(["english", "hindi"] as const).map((lang) => {
                     const isSelected = preferences.translationLanguage === lang;
-                    const selectedBgColor = colorScheme === "dark" 
-                      ? "#4a4a4a"
-                      : theme.tint;
-                    const textColor = isSelected 
-                      ? "#fff"
-                      : theme.text;
-                    
+                    const selectedBgColor =
+                      colorScheme === "dark" ? "#4a4a4a" : theme.tint;
+                    const textColor = isSelected ? "#fff" : theme.text;
+
                     return (
                       <TouchableOpacity
                         key={lang}
@@ -462,7 +550,9 @@ export default function Settings() {
                               ? "#1a1a1a"
                               : "#e0e0e0",
                             borderColor: isSelected
-                              ? (colorScheme === "dark" ? "#4a4a4a" : theme.tint)
+                              ? colorScheme === "dark"
+                                ? "#4a4a4a"
+                                : theme.tint
                               : "transparent"
                           }
                         ]}
@@ -500,7 +590,9 @@ export default function Settings() {
                 <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
                   Show Transliteration
                 </ThemedText>
-                <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+                <ThemedText
+                  style={[styles.settingDescription, { color: theme.icon }]}
+                >
                   Display phonetic transliteration
                 </ThemedText>
               </View>
@@ -509,8 +601,13 @@ export default function Settings() {
                 onValueChange={(value) =>
                   handlePreferenceChange("showTransliteration", value)
                 }
-                trackColor={{ false: theme.icon + "40", true: theme.tint + "80" }}
-                thumbColor={preferences.showTransliteration ? theme.tint : "#f4f3f4"}
+                trackColor={{
+                  false: theme.icon + "40",
+                  true: theme.tint + "80"
+                }}
+                thumbColor={
+                  preferences.showTransliteration ? theme.tint : "#f4f3f4"
+                }
               />
             </View>
           </View>
@@ -615,6 +712,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12
+  },
+  themeButtons: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12
+  },
+  themeButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center"
   },
   settingRow: {
     flexDirection: "row",

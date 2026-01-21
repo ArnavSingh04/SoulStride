@@ -10,38 +10,40 @@ export interface PrayerPreferences {
   showOriginal: boolean;
   showTranslation: boolean;
   showTransliteration: boolean;
-  translationLanguage?: 'english' | 'hindi'; // Which translation to show if showTranslation is true
-  selectedHolyBookIds?: string[]; // User's selected holy books/faith (can select multiple)
+  translationLanguage?: 'english' | 'hindi';
+  selectedHolyBookIds: string[]; // required in-app; default []
 }
 
-// Default preferences
 function getDefaultPreferences(): PrayerPreferences {
   return {
     primaryLanguage: 'punjabi',
     showOriginal: true,
     showTranslation: true,
     showTransliteration: true,
-    translationLanguage: 'english'
+    translationLanguage: 'english',
+    selectedHolyBookIds: [],
   };
 }
 
-// Load prayer preferences
 export async function loadPrayerPreferences(): Promise<PrayerPreferences> {
   try {
     const data = await AsyncStorage.getItem(PRAYER_PREFERENCES_KEY);
-    if (data) {
-      const parsed = JSON.parse(data);
-      // Merge with defaults to ensure all fields exist
-      return { ...getDefaultPreferences(), ...parsed };
-    }
-    return getDefaultPreferences();
+    if (!data) return getDefaultPreferences();
+
+    const parsed = JSON.parse(data);
+    // Back-compat: migrate older single-selection key to multi-selection
+    const migrated =
+      parsed?.selectedHolyBookId && !parsed?.selectedHolyBookIds
+        ? { ...parsed, selectedHolyBookIds: [parsed.selectedHolyBookId] }
+        : parsed;
+
+    return { ...getDefaultPreferences(), ...migrated };
   } catch (error) {
     console.error('Error loading prayer preferences:', error);
     return getDefaultPreferences();
   }
 }
 
-// Save prayer preferences
 export async function savePrayerPreferences(preferences: PrayerPreferences): Promise<void> {
   try {
     await AsyncStorage.setItem(PRAYER_PREFERENCES_KEY, JSON.stringify(preferences));
@@ -51,7 +53,6 @@ export async function savePrayerPreferences(preferences: PrayerPreferences): Pro
   }
 }
 
-// Update specific preference
 export async function updatePrayerPreference<K extends keyof PrayerPreferences>(
   key: K,
   value: PrayerPreferences[K]
