@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TextInput,
   TouchableOpacity,
   Modal,
-  Dimensions,
   Alert,
   ActivityIndicator
 } from 'react-native';
@@ -288,14 +286,11 @@ export default function GuruGranthSahibReader({
               </ThemedText>
               {page.lines.map((line, index) => (
                 <View key={line.id || index} style={styles.lineContainer}>
+                  {/* Original text first */}
                   <ThemedText style={[styles.punjabiText, { fontFamily: 'serif' }]}>
                     {line.punjabi}
                   </ThemedText>
-                  <ThemedText
-                    style={[styles.englishText, { color: theme.icon }]}
-                  >
-                    {line.english}
-                  </ThemedText>
+                  {/* Transliteration second */}
                   {line.transliteration_english && (
                     <ThemedText
                       style={[styles.transliterationText, { color: theme.icon }]}
@@ -303,6 +298,12 @@ export default function GuruGranthSahibReader({
                       {line.transliteration_english}
                     </ThemedText>
                   )}
+                  {/* Translation/Meaning third (below transliteration) */}
+                  <ThemedText
+                    style={[styles.englishText, { color: theme.icon }]}
+                  >
+                    {line.english}
+                  </ThemedText>
                   {index < page.lines.length - 1 && (
                     <View
                       style={[styles.separator, { backgroundColor: theme.icon + '20' }]}

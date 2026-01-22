@@ -375,21 +375,7 @@ export default function PrayerList({
 
                 return (
                   <View key={index} style={styles.prayerLineContainer}>
-                    {/* Primary language text (only if not punjabi) */}
-                    {shouldShowPrimary &&
-                      primaryText &&
-                      primaryLanguage !== "punjabi" && (
-                        <ThemedText
-                          style={[
-                            styles.prayerPrimaryText,
-                            { fontFamily: undefined }
-                          ]}
-                        >
-                          {primaryText}
-                        </ThemedText>
-                      )}
-
-                    {/* Original Punjabi text (shown when showOriginal is true) */}
+                    {/* Original Punjabi text (always first) */}
                     {shouldShowOriginalPunjabi && (
                       <ThemedText
                         style={[
@@ -405,7 +391,7 @@ export default function PrayerList({
                       </ThemedText>
                     )}
 
-                    {/* Transliteration */}
+                    {/* Transliteration (second) */}
                     {showTransliteration && transliterationText && (
                       <ThemedText
                         style={[
@@ -417,7 +403,21 @@ export default function PrayerList({
                       </ThemedText>
                     )}
 
-                    {/* Translation */}
+                    {/* Primary language text (only if not punjabi) - shown after transliteration */}
+                    {shouldShowPrimary &&
+                      primaryText &&
+                      primaryLanguage !== "punjabi" && (
+                        <ThemedText
+                          style={[
+                            styles.prayerPrimaryText,
+                            { fontFamily: undefined }
+                          ]}
+                        >
+                          {primaryText}
+                        </ThemedText>
+                      )}
+
+                    {/* Translation/Meaning (always last, at the bottom) */}
                     {shouldShowTranslation && (
                       <ThemedText
                         style={[

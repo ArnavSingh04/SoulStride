@@ -433,11 +433,13 @@ export default function Routine() {
 
               {selectedPrayer.lines.map((line, index) => (
                 <View key={index} style={styles.prayerLineContainer}>
+                  {/* Original text first */}
                   <ThemedText
                     style={[styles.prayerPunjabiText, { fontFamily: 'serif' }]}
                   >
                     {line.punjabi}
                   </ThemedText>
+                  {/* Transliteration second */}
                   {line.transliteration_english && (
                     <ThemedText
                       style={[styles.prayerTransliterationText, { color: theme.icon }]}
@@ -445,6 +447,7 @@ export default function Routine() {
                       {line.transliteration_english}
                     </ThemedText>
                   )}
+                  {/* Meaning/Translation third (below transliteration) */}
                   <ThemedText
                     style={[styles.prayerEnglishText, { color: theme.icon }]}
                   >
