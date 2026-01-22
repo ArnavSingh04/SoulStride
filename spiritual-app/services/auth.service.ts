@@ -57,19 +57,6 @@ export async function signIn(data: SignInData): Promise<{ user: User | null; err
       return { user: null, error };
     }
 
-    // Check if email is verified
-    if (authData.user && !authData.user.email_confirmed_at) {
-      // Sign out the user if email is not verified
-      await supabase.auth.signOut();
-      return { 
-        user: null, 
-        error: {
-          name: 'EmailNotConfirmed',
-          message: 'Please verify your email before signing in. Check your inbox for the verification link.',
-        } as AuthError
-      };
-    }
-
     return { user: authData.user, error: null };
   } catch (error) {
     return { 

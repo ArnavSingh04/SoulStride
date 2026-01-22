@@ -53,16 +53,8 @@ export default function SignUpScreen() {
       if (error) {
         Alert.alert('Sign Up Failed', error.message || 'Unable to create account');
       } else {
-        Alert.alert(
-          'Success',
-          'Account created! Please check your email to verify your account.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/(tabs)'),
-            },
-          ]
-        );
+        // Successfully signed up and logged in, redirect to home
+        router.replace('/(tabs)');
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');

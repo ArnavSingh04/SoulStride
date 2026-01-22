@@ -66,3 +66,7 @@ export async function setOnboardingComplete(value: boolean): Promise<void> {
   await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, value ? 'true' : 'false');
 }
 
+export async function resetOnboarding(): Promise<void> {
+  await AsyncStorage.multiRemove([USER_PROFILE_KEY, ONBOARDING_COMPLETE_KEY]);
+}
+
