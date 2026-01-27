@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import {supabase} from '../lib/supabase';
+import { supabase } from '../lib/supabase-server';
 
 interface PrayerLineJSON {
   shabad_id: string;

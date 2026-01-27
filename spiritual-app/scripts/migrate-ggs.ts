@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase-server';
 import { guruGranthSahibData } from '../data/guruGranthSahib';
 
 async function migrateGuruGranthSahib() {

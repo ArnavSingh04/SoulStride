@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase-server';
 
 console.log('🚀 Starting complete migration to Supabase...');
 console.log('This will migrate all prayers and Guru Granth Sahib data.\n');

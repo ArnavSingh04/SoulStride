@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase-server';
 
 async function createTables() {
   console.log('🏗️  Creating database tables...\n');

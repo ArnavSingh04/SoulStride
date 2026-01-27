@@ -5,7 +5,11 @@ import type {
   PrayerWithLines, 
   BaniLine, 
   PageWithLines,
-  HolyBook 
+  HolyBook,
+  Lesson,
+  LessonBlock,
+  LessonWithBlocks,
+  LessonProgress
 } from './database.types';
 
 // ============== HOLY BOOKS ==============
@@ -277,5 +281,218 @@ export async function searchPages(query: string): Promise<BaniLine[]> {
 
 export async function getTotalPages(): Promise<number> {
   return getTotalGGSPages();
+}
+
+// ============== LESSONS ==============
+
+export async function getAllLessons(holyBookId?: string, section?: string): Promise<LessonWithBlocks[]> {
+  try {
+    let query = supabase
+      .from('lessons')
+      .select('*');
+    
+    if (holyBookId) {
+      query = query.eq('holy_book_id', holyBookId);
+    }
+    
+    if (section) {
+      query = query.eq('section', section);
+    }
+    
+    const { data: lessons, error: lessonsError } = await query.order('order_index');
+    
+    if (lessonsError) {
+      console.error('Error fetching lessons:', lessonsError);
+      console.error('Error details:', JSON.stringify(lessonsError, null, 2));
+      // Check if table doesn't exist
+      if (lessonsError.code === '42P01' || lessonsError.message?.includes('does not exist')) {
+        throw new Error('Lessons table does not exist. Please run the database schema migration first.');
+      }
+      throw new Error(`Database error: ${lessonsError.message || 'Unknown error'}`);
+    }
+    
+    if (!lessons || lessons.length === 0) {
+      console.log('No lessons found in database');
+      return [];
+    }
+    
+    console.log(`Found ${lessons.length} lessons`);
+  
+    // Fetch blocks for each lesson
+    const lessonsWithBlocks = await Promise.all(
+      lessons.map(async (lesson) => {
+        const { data: blocks, error: blocksError } = await supabase
+          .from('lesson_blocks')
+          .select('*')
+          .eq('lesson_id', lesson.id)
+          .order('block_order');
+        
+        if (blocksError) {
+          console.error(`Error fetching blocks for lesson ${lesson.id}:`, blocksError);
+          return { ...lesson, blocks: [] };
+        }
+        
+        return {
+          ...lesson,
+          blocks: blocks || []
+        };
+      })
+    );
+    
+    return lessonsWithBlocks;
+  } catch (error) {
+    console.error('Error in getAllLessons:', error);
+    throw error; // Re-throw to let component handle it
+  }
+}
+
+export async function getLessonById(id: string): Promise<LessonWithBlocks | null> {
+  const { data: lesson, error: lessonError } = await supabase
+    .from('lessons')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (lessonError) {
+    console.error('Error fetching lesson:', lessonError);
+    return null;
+  }
+  
+  const { data: blocks, error: blocksError } = await supabase
+    .from('lesson_blocks')
+    .select('*')
+    .eq('lesson_id', id)
+    .order('block_order');
+  
+  if (blocksError) {
+    console.error('Error fetching lesson blocks:', blocksError);
+    return { ...lesson, blocks: [] };
+  }
+  
+  return {
+    ...lesson,
+    blocks: blocks || []
+  };
+}
+
+export async function getLessonsBySection(section: string, holyBookId?: string): Promise<LessonWithBlocks[]> {
+  return getAllLessons(holyBookId, section);
+}
+
+export async function getLessonsByHolyBook(holyBookId: string): Promise<LessonWithBlocks[]> {
+  return getAllLessons(holyBookId);
+}
+
+export async function searchLessons(query: string, holyBookId?: string): Promise<LessonWithBlocks[]> {
+  if (!query.trim()) {
+    return getAllLessons(holyBookId);
+  }
+  
+  let lessonsQuery = supabase
+    .from('lessons')
+    .select('*')
+    .or(`title.ilike.%${query}%,description.ilike.%${query}%,learning_objective.ilike.%${query}%,section.ilike.%${query}%`);
+  
+  if (holyBookId) {
+    lessonsQuery = lessonsQuery.eq('holy_book_id', holyBookId);
+  }
+  
+  const { data: lessons, error: lessonsError } = await lessonsQuery.order('order_index');
+  
+  if (lessonsError) {
+    console.error('Error searching lessons:', lessonsError);
+    return [];
+  }
+  
+  if (!lessons || lessons.length === 0) {
+    return [];
+  }
+  
+  // Fetch blocks for each lesson
+  const lessonsWithBlocks = await Promise.all(
+    lessons.map(async (lesson) => {
+      const { data: blocks } = await supabase
+        .from('lesson_blocks')
+        .select('*')
+        .eq('lesson_id', lesson.id)
+        .order('block_order');
+      
+      return {
+        ...lesson,
+        blocks: blocks || []
+      };
+    })
+  );
+  
+  return lessonsWithBlocks;
+}
+
+// Lesson progress functions (for when user auth is implemented)
+export async function getLessonProgress(userId: string, lessonId: string): Promise<LessonProgress | null> {
+  const { data, error } = await supabase
+    .from('lesson_progress')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('lesson_id', lessonId)
+    .single();
+  
+  if (error) {
+    console.error('Error fetching lesson progress:', error);
+    return null;
+  }
+  
+  return data;
+}
+
+export async function updateLessonProgress(
+  userId: string,
+  lessonId: string,
+  progress: Partial<LessonProgress>
+): Promise<LessonProgress | null> {
+  const { data, error } = await supabase
+    .from('lesson_progress')
+    .upsert({
+      user_id: userId,
+      lesson_id: lessonId,
+      ...progress,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'user_id,lesson_id'
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('Error updating lesson progress:', error);
+    return null;
+  }
+  
+  return data;
+}
+
+export async function getUserProgressForSection(userId: string, section: string): Promise<LessonProgress[]> {
+  const { data: lessons } = await supabase
+    .from('lessons')
+    .select('id')
+    .eq('section', section);
+  
+  if (!lessons || lessons.length === 0) {
+    return [];
+  }
+  
+  const lessonIds = lessons.map(l => l.id);
+  
+  const { data, error } = await supabase
+    .from('lesson_progress')
+    .select('*')
+    .eq('user_id', userId)
+    .in('lesson_id', lessonIds);
+  
+  if (error) {
+    console.error('Error fetching user progress:', error);
+    return [];
+  }
+  
+  return data || [];
 }
 

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase-server';
 import { guruGranthSahibPrayers } from '../data/prayers/guru-granth-sahib';
 import { dashamGranthPrayers } from '../data/prayers/dasham-granth';
 import type { HolyBookPrayerCollection, Prayer } from '../data/prayers/types';
