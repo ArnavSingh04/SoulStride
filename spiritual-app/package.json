@@ -14,6 +14,8 @@
     "migrate:prayers": "tsx scripts/migrate-prayers.ts",
     "migrate:prayers:json": "tsx scripts/migrate-prayers-json.ts",
     "migrate:ggs": "tsx scripts/migrate-ggs.ts",
+    "migrate:ggs-lessons": "tsx scripts/migrate-ggs-lessons.ts",
+    "migrate:ggs-lessons-by-pauri": "tsx scripts/migrate-ggs-lessons-by-pauri.ts",
     "migrate:sample-lesson": "tsx scripts/migrate-sample-lesson.ts",
     "migrate:template-lessons": "tsx scripts/migrate-template-lessons.ts",
     "check:lessons": "tsx scripts/check-lessons.ts",

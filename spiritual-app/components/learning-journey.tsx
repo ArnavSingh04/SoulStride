@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
@@ -17,10 +18,11 @@ import { getAllLessons, type LessonWithBlocks } from "@/lib/database.service";
 
 const { width, height } = Dimensions.get("window");
 const NODE_SIZE = 64;
-const NODE_SPACING = 32; // Increased to account for labels
+const NODE_SPACING = 32; // Increased to account for labels and prevent overlap
 const PATH_WIDTH = 4;
-const LABEL_HEIGHT = 32; // Approximate height for lesson label (2 lines of text)
-const CURVE_CONTROL_OFFSET = 60; // Control point offset for smooth curves
+const LABEL_HEIGHT = 44; // Approximate height for lesson label (2 lines of text + spacing)
+const CURVE_CONTROL_OFFSET = 50; // Control point offset for smooth curves
+const LESSONS_PER_BATCH = 10; // Load 10 lessons at a time
 
 interface LearningJourneyProps {
   holyBookId?: string;
@@ -44,14 +46,27 @@ export default function LearningJourney({
 }: LearningJourneyProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
-  const [lessons, setLessons] = useState<LessonWithBlocks[]>([]);
+  const [allLessons, setAllLessons] = useState<LessonWithBlocks[]>([]); // All lessons from DB
+  const [displayedLessons, setDisplayedLessons] = useState<LessonWithBlocks[]>([]); // Currently displayed
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [nodes, setNodes] = useState<LessonNode[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
     loadLessons();
   }, [holyBookId]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setDisplayedLessons([]);
+    setNodes([]);
+    setHasMore(true);
+    await loadLessons();
+    setRefreshing(false);
+  };
 
   const loadLessons = async () => {
     try {
@@ -63,65 +78,107 @@ export default function LearningJourney({
       
       if (!data || data.length === 0) {
         setError('No lessons found. Please run: npm run migrate:template-lessons');
-        setLessons([]);
+        setAllLessons([]);
+        setDisplayedLessons([]);
         setNodes([]);
         setLoading(false);
         return;
       }
 
-      setLessons(data);
-
-      // Sort all lessons by order_index (unified continuous flow)
-      const sortedLessons = [...data].sort((a, b) => a.order_index - b.order_index);
-      
-      console.log('Sorted lessons (continuous flow):', sortedLessons.length);
-
-      // Generate node positions with winding path - single continuous flow
-      const allNodes: LessonNode[] = [];
-      
-      sortedLessons.forEach((lesson, index) => {
-        // Create winding path: alternate left/right
-        const offsetX = (index % 3 === 1) ? -40 : (index % 3 === 2) ? 40 : 0;
-        const x = width / 2 - NODE_SIZE / 2 + offsetX;
-        // Position nodes starting from top (no banner offset)
-        // Account for label height in spacing
-        const y = 20 + index * (NODE_SIZE + NODE_SPACING + LABEL_HEIGHT);
-
-        allNodes.push({
-          lesson,
-          x,
-          y,
-          completed: false, // TODO: Get from user progress
-          locked: index > 0 && !allNodes[index - 1]?.lesson.id, // TODO: Check unlock conditions
-          isCheckpoint: (index + 1) % 5 === 0,
-          isSpecial: lesson.lesson_type === "checkpoint" || lesson.id.includes("checkpoint"),
+      // Sort all lessons by order_index and deduplicate by order_index
+      // If multiple lessons have the same order_index, keep only the first one
+      const seenOrderIndices = new Set<number>();
+      const sortedLessons = [...data]
+        .sort((a: LessonWithBlocks, b: LessonWithBlocks) => a.order_index - b.order_index)
+        .filter(lesson => {
+          if (seenOrderIndices.has(lesson.order_index)) {
+            console.warn(`Duplicate order_index ${lesson.order_index} found for lesson: ${lesson.id}. Skipping duplicate.`);
+            return false;
+          }
+          seenOrderIndices.add(lesson.order_index);
+          return true;
         });
-      });
-
-      setNodes(allNodes);
-      console.log('Created nodes:', allNodes.length);
+      setAllLessons(sortedLessons);
       
-      // Calculate total content height for proper scrolling
-      if (allNodes.length > 0) {
-        const lastNode = allNodes[allNodes.length - 1];
-        const totalHeight = lastNode.y + NODE_SIZE + LABEL_HEIGHT + 40; // Extra padding at bottom
-        // This will be used to set minHeight on pathContainer
-      }
+      console.log('Total lessons available:', sortedLessons.length);
+      
+      // Load first batch
+      const firstBatch = sortedLessons.slice(0, LESSONS_PER_BATCH);
+      setDisplayedLessons(firstBatch);
+      setHasMore(sortedLessons.length > LESSONS_PER_BATCH);
+      generateNodes(firstBatch);
+      
     } catch (err) {
       console.error("Error loading lessons:", err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(`Failed to load lessons: ${errorMessage}. Please check your database connection and ensure tables exist.`);
-      setLessons([]);
+      setAllLessons([]);
+      setDisplayedLessons([]);
       setNodes([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getNodeIcon = (lesson: LessonWithBlocks, completed: boolean, locked: boolean, isCheckpoint?: boolean, isSpecial?: boolean) => {
-    if (locked) {
-      return "lock-closed";
+  const loadMoreLessons = () => {
+    if (loadingMore || !hasMore || allLessons.length === 0) return;
+    
+    setLoadingMore(true);
+    const startIndex = displayedLessons.length;
+    const endIndex = Math.min(startIndex + LESSONS_PER_BATCH, allLessons.length);
+    const newLessons = allLessons.slice(startIndex, endIndex);
+    
+    setDisplayedLessons(prev => {
+      const updated = [...prev, ...newLessons];
+      generateNodes(updated);
+      return updated;
+    });
+    setHasMore(endIndex < allLessons.length);
+    setLoadingMore(false);
+  };
+
+  const generateNodes = (lessonsToDisplay: LessonWithBlocks[]) => {
+    const allNodes: LessonNode[] = [];
+    
+    lessonsToDisplay.forEach((lesson) => {
+      // Use order_index for global positioning (not local index in displayed array)
+      const globalIndex = lesson.order_index - 1; // order_index is 1-based
+      
+      // Create winding path: alternate left/right
+      const offsetX = (globalIndex % 3 === 1) ? -40 : (globalIndex % 3 === 2) ? 40 : 0;
+      const x = width / 2 - NODE_SIZE / 2 + offsetX;
+      // Position nodes starting from top, using global index
+      const y = 20 + globalIndex * (NODE_SIZE + NODE_SPACING + LABEL_HEIGHT);
+
+      allNodes.push({
+        lesson,
+        x,
+        y,
+        completed: false, // TODO: Get from user progress
+        locked: false, // All lessons unlocked for now
+        isCheckpoint: (globalIndex + 1) % 5 === 0,
+        isSpecial: lesson.lesson_type === "checkpoint" || lesson.id.includes("checkpoint"),
+      });
+    });
+
+    setNodes(allNodes);
+  };
+
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 200; // Trigger loading when 200px from bottom
+    
+    if (
+      layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom &&
+      hasMore &&
+      !loadingMore &&
+      allLessons.length > 0
+    ) {
+      loadMoreLessons();
     }
+  };
+
+  const getNodeIcon = (lesson: LessonWithBlocks, completed: boolean, locked: boolean, isCheckpoint?: boolean, isSpecial?: boolean) => {
     if (completed) {
       return "checkmark-circle";
     }
@@ -130,7 +187,7 @@ export default function LearningJourney({
     }
 
     // Determine icon based on lesson type and blocks
-    const blockTypes = lesson.blocks.map((b) => b.block_type);
+    const blockTypes = lesson.blocks.map((b: any) => b.block_type);
     if (blockTypes.includes("audio_recitation") || blockTypes.includes("repeat_practice")) {
       return "mic";
     }
@@ -194,7 +251,7 @@ export default function LearningJourney({
     );
   }
 
-  if (!loading && lessons.length === 0) {
+  if (!loading && allLessons.length === 0) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.emptyContainer}>
@@ -213,8 +270,14 @@ export default function LearningJourney({
     );
   }
 
-  // Calculate content height for proper scrolling
-  const contentHeight = nodes.length > 0 
+  // Calculate content height based on all lessons (for proper scrolling)
+  const totalLessons = allLessons.length;
+  const estimatedContentHeight = totalLessons > 0
+    ? 20 + totalLessons * (NODE_SIZE + NODE_SPACING + LABEL_HEIGHT) + 100
+    : height;
+  
+  // Current displayed content height
+  const currentContentHeight = nodes.length > 0 
     ? nodes[nodes.length - 1].y + NODE_SIZE + LABEL_HEIGHT + 100
     : height;
 
@@ -222,16 +285,26 @@ export default function LearningJourney({
     <ThemedView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { minHeight: contentHeight }]}
+        contentContainerStyle={[styles.scrollContent, { minHeight: estimatedContentHeight }]}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.tint}
+            colors={[theme.tint]}
+          />
+        }
       >
         {/* Learning Path - Continuous flow */}
-        <View style={[styles.pathContainer, { minHeight: contentHeight }]}>
+        <View style={[styles.pathContainer, { minHeight: estimatedContentHeight }]}>
           {/* Single SVG for all connection paths */}
           <Svg
             style={styles.pathSvg}
             width={width}
-            height={contentHeight}
+            height={estimatedContentHeight}
           >
             {nodes.map((node, nodeIndex) => {
               const isLast = nodeIndex === nodes.length - 1;
@@ -270,7 +343,7 @@ export default function LearningJourney({
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  opacity={node.locked ? 0.3 : 0.6}
+                  opacity={0.6}
                 />
               );
             })}
@@ -294,7 +367,10 @@ export default function LearningJourney({
             );
 
             return (
-              <View key={node.lesson.id} style={styles.nodeContainer}>
+              <View 
+                key={`node-${node.lesson.id}-${nodeIndex}`} 
+                style={styles.nodeContainer}
+              >
 
                 {/* Lesson Node */}
                 <View style={[styles.lessonNodeWrapper, { left: node.x, top: node.y }]}>
@@ -302,33 +378,30 @@ export default function LearningJourney({
                     style={[
                       styles.lessonNode,
                       {
-                        backgroundColor: node.locked
-                          ? "#E5E5E5"
-                          : node.completed
+                        backgroundColor: node.completed
                           ? theme.tint
                           : node.isCheckpoint || node.isSpecial
                           ? "#FFD700"
                           : theme.tint,
                         borderColor: nodeColor,
-                        borderWidth: node.locked ? 2 : 0,
-                        shadowColor: node.locked ? "transparent" : "#000",
+                        borderWidth: 0,
+                        shadowColor: "#000",
                         shadowOffset: { width: 0, height: 2 },
                         shadowOpacity: 0.1,
                         shadowRadius: 4,
-                        elevation: node.locked ? 0 : 3,
+                        elevation: 3,
                       },
                     ]}
                     onPress={() => {
-                      if (!node.locked && onLessonPress) {
+                      if (onLessonPress) {
                         onLessonPress(node.lesson);
                       }
                     }}
-                    disabled={node.locked}
                   >
                     <Ionicons
                       name={iconName as any}
                       size={32}
-                      color={node.locked ? "#999999" : "#FFFFFF"}
+                      color="#FFFFFF"
                     />
                   </TouchableOpacity>
                   {/* Progress Stars (for completed lessons) */}
@@ -351,9 +424,10 @@ export default function LearningJourney({
                       style={[
                         styles.lessonLabel,
                         { color: theme.text },
-                        node.locked && styles.lessonLabelLocked
                       ]}
                       numberOfLines={2}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={false}
                     >
                       {node.lesson.title || node.lesson.learning_objective || 'Lesson'}
                     </ThemedText>
@@ -362,6 +436,16 @@ export default function LearningJourney({
               </View>
             );
           })}
+          
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <View style={[styles.loadingMoreContainer, { top: currentContentHeight }]}>
+              <ActivityIndicator size="small" color={theme.tint} />
+              <ThemedText style={[styles.loadingMoreText, { color: theme.icon }]}>
+                Loading more lessons...
+              </ThemedText>
+            </View>
+          )}
         </View>
       </ScrollView>
     </ThemedView>
@@ -453,5 +537,18 @@ const styles = StyleSheet.create({
   },
   star: {
     marginHorizontal: 1,
+  },
+  loadingMoreContainer: {
+    position: "absolute",
+    width: "100%",
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    marginLeft: 8,
   },
 });
