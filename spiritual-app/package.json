@@ -19,6 +19,7 @@
     "migrate:sample-lesson": "tsx scripts/migrate-sample-lesson.ts",
     "migrate:template-lessons": "tsx scripts/migrate-template-lessons.ts",
     "check:lessons": "tsx scripts/check-lessons.ts",
+    "import:lessons": "tsx scripts/import-lessons-from-json.ts",
     "build:android": "eas build --platform android --profile preview",
     "build:ios": "eas build --platform ios --profile preview",
     "build:all": "eas build --platform all --profile preview",

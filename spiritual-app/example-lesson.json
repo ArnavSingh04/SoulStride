@@ -1,0 +1,84 @@
+[
+  {
+    "lesson": {
+      "id": "japji_01_ik_onkar",
+      "holy_book_id": "guru-granth-sahib",
+      "section": "Japji Sahib",
+      "lesson_type": "precision",
+      "difficulty": 1,
+      "estimated_time_min": 4,
+      "learning_objective": "Understand the precise meaning of Ik Oankar",
+      "title": "Ik Oankar: The Foundation",
+      "title_punjabi": "ੴ: ਮੂਲ",
+      "description": "Learn the foundational concept of Ik Oankar and its profound meaning",
+      "order_index": 1,
+      "unlock_after_lesson_id": null
+    },
+    "blocks": [
+      {
+        "block_order": 1,
+        "block_type": "objective",
+        "block_data": {
+          "text": "Understand what Ik Oankar means in the context of Sikh philosophy."
+        }
+      },
+      {
+        "block_order": 2,
+        "block_type": "scripture",
+        "block_data": {
+          "gurmukhi": "ੴ",
+          "transliteration": "Ik Oankar",
+          "translation": "One Universal Reality",
+          "show_by_default": true
+        }
+      },
+      {
+        "block_order": 3,
+        "block_type": "context",
+        "block_data": {
+          "text": "This appears at the very beginning of Japji Sahib, establishing the foundational principle before all other teachings."
+        }
+      },
+      {
+        "block_order": 4,
+        "block_type": "explanation",
+        "block_data": {
+          "text": "Ik Oankar is not a numerical statement about gods. It points to the unity of all existence—being, creation, and reality as one. The symbol ੴ combines \"Ik\" (one) with \"Oankar\" (the primal sound, the creative force), indicating that the One is both transcendent and immanent."
+        }
+      },
+      {
+        "block_order": 5,
+        "block_type": "question",
+        "block_data": {
+          "question_type": "mcq",
+          "prompt": "Which interpretation best reflects Ik Oankar?",
+          "options": [
+            "There is only one god",
+            "God exists separately from creation",
+            "All existence is fundamentally one",
+            "It is a poetic symbol without meaning"
+          ],
+          "correct_option": 2,
+          "feedback": {
+            "0": "Ik Oankar is not about counting gods, but about the nature of reality itself.",
+            "1": "The teaching emphasizes unity, not separation between creator and creation.",
+            "2": "Correct! Ik Oankar points to the fundamental oneness of all existence.",
+            "3": "The symbol carries deep philosophical meaning about the nature of reality."
+          }
+        }
+      },
+      {
+        "block_order": 6,
+        "block_type": "summary",
+        "block_data": {
+          "key_takeaways": [
+            "Ik Oankar is not about counting gods, but about the nature of reality",
+            "It points to the fundamental unity of all existence",
+            "The One is both transcendent and immanent",
+            "This teaching challenges our sense of separation"
+          ]
+        }
+      }
+    ]
+  }
+]

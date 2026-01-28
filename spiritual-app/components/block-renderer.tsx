@@ -53,6 +53,15 @@ export default function BlockRenderer({
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
 
+  // Safety check: if block_data is missing, show error
+  if (!block.block_data) {
+    return (
+      <View style={styles.unknownBlock}>
+        <ThemedText>Error: Block data is missing for type: {block.block_type}</ThemedText>
+      </View>
+    );
+  }
+
   const renderBlock = () => {
     switch (block.block_type) {
       case "objective":
@@ -421,7 +430,7 @@ function QuestionBlock({
       <ThemedText type="subtitle" style={styles.questionPrompt}>
         {data.prompt}
       </ThemedText>
-      {data.options && (
+      {data.options && Array.isArray(data.options) && (
         <View style={styles.optionsContainer}>
           {data.options.map((option, index) => {
             const isSelected = selectedOption === index;
@@ -500,7 +509,7 @@ function MatchBlock({
     }
   };
 
-  const isComplete = data.left.every((left) => matches[left]);
+  const isComplete = (data.left || []).every((left) => matches[left]);
 
   const isDark = theme.background === Colors.dark.background;
   
@@ -511,7 +520,7 @@ function MatchBlock({
       </ThemedText>
       <View style={styles.matchContainer}>
         <View style={styles.matchColumn}>
-          {data.left.map((item, index) => (
+          {(data.left || []).map((item, index) => (
             <TouchableOpacity
               key={index}
               style={[
@@ -532,13 +541,13 @@ function MatchBlock({
           ))}
         </View>
         <View style={styles.matchColumn}>
-          {data.right.map((item, index) => (
+          {(data.right || []).map((item, index) => (
             <TouchableOpacity
               key={index}
               style={[styles.matchItem, { borderColor: theme.icon, backgroundColor: theme.background }]}
               onPress={() => {
                 // Find unmatched left item
-                const unmatchedLeft = data.left.find((left) => !matches[left]);
+                const unmatchedLeft = (data.left || []).find((left) => !matches[left]);
                 if (unmatchedLeft) {
                   handleMatch(unmatchedLeft, item);
                 }
@@ -584,7 +593,7 @@ function ClozeBlock({
     }
   };
 
-  const textParts = data.text.split(/\s+/);
+  const textParts = (data.text || "").split(/\s+/);
   let blankIndex = 0;
 
   const isDark = theme.background === Colors.dark.background;
@@ -596,7 +605,7 @@ function ClozeBlock({
       </ThemedText>
       <View style={styles.clozeContainer}>
         {textParts.map((part, index) => {
-          const blank = data.blanks.find((b) => b.index === blankIndex);
+          const blank = (data.blanks || []).find((b) => b.index === blankIndex);
           if (blank) {
             blankIndex++;
             const userAnswer = answers[blank.index];
@@ -656,7 +665,7 @@ function OrderBlock({
   previousAnswer?: any;
 }) {
   const [order, setOrder] = useState<number[]>(
-    previousAnswer?.order ?? data.items.map((_, i) => i)
+    previousAnswer?.order ?? (data.items || []).map((_, i) => i)
   );
 
   const handleMove = (fromIndex: number, toIndex: number) => {
@@ -669,7 +678,7 @@ function OrderBlock({
     }
   };
 
-  const isCorrect = JSON.stringify(order) === JSON.stringify(data.correct_order);
+  const isCorrect = JSON.stringify(order) === JSON.stringify(data.correct_order || []);
 
   const isDark = theme.background === Colors.dark.background;
   
@@ -697,7 +706,7 @@ function OrderBlock({
           >
             <Ionicons name="reorder" size={20} color={theme.icon} />
             <ThemedText style={styles.orderItemText}>
-              {displayIndex + 1}. {data.items[itemIndex]}
+              {displayIndex + 1}. {(data.items || [])[itemIndex] || ""}
             </ThemedText>
             {displayIndex < order.length - 1 && (
               <TouchableOpacity
@@ -747,8 +756,8 @@ function HighlightBlock({
   };
 
   const isCorrect =
-    selectedIndices.length === data.correct_indices.length &&
-    data.correct_indices.every((idx) => selectedIndices.includes(idx));
+    selectedIndices.length === (data.correct_indices || []).length &&
+    (data.correct_indices || []).every((idx) => selectedIndices.includes(idx));
 
   const isDark = theme.background === Colors.dark.background;
   
@@ -758,9 +767,9 @@ function HighlightBlock({
         {data.prompt}
       </ThemedText>
       <View style={styles.highlightContainer}>
-        {data.text_tokens.map((token, index) => {
+        {(data.text_tokens || []).map((token, index) => {
           const isSelected = selectedIndices.includes(index);
-          const isCorrectIndex = data.correct_indices.includes(index);
+          const isCorrectIndex = (data.correct_indices || []).includes(index);
 
           return (
             <TouchableOpacity
@@ -829,12 +838,12 @@ function ClassificationBlock({
         {data.prompt}
       </ThemedText>
       <View style={styles.bucketsContainer}>
-        {data.buckets.map((bucket, index) => (
+        {(data.buckets || []).map((bucket, index) => (
           <ThemedView key={index} style={[styles.bucket, { borderColor: theme.icon, backgroundColor: theme.background }]}>
             <ThemedText type="subtitle" style={styles.bucketTitle}>
               {bucket}
             </ThemedText>
-            {data.items
+            {(data.items || [])
               .filter((item) => classifications[item] === bucket)
               .map((item) => (
                 <TouchableOpacity
@@ -851,7 +860,7 @@ function ClassificationBlock({
         ))}
       </View>
       <View style={styles.itemsContainer}>
-        {data.items
+        {(data.items || [])
           .filter((item) => !classifications[item])
           .map((item) => (
             <TouchableOpacity
@@ -860,7 +869,7 @@ function ClassificationBlock({
               onPress={() => {
                 // Allow user to select bucket
                 Alert.alert("Select bucket", "Choose a bucket", [
-                  ...data.buckets.map((bucket) => ({
+                  ...(data.buckets || []).map((bucket) => ({
                     text: bucket,
                     onPress: () => handleClassify(item, bucket),
                   })),
@@ -912,7 +921,7 @@ function ScenarioChoiceBlock({
       </ThemedText>
       <ThemedText style={styles.scenarioQuestion}>{data.question}</ThemedText>
       <View style={styles.optionsContainer}>
-        {data.options.map((option, index) => {
+        {(data.options || []).map((option, index) => {
           const isSelected = selectedOption === index;
           const isCorrectOption = index === data.correct_option;
           let buttonStyle = styles.optionButton;
@@ -990,7 +999,7 @@ function MicroQuizBlock({
       <ThemedText type="subtitle" style={styles.microQuizTitle}>
         Quick Check
       </ThemedText>
-      {data.items.map((item, index) => (
+      {(data.items || []).map((item, index) => (
         <QuestionBlock
           key={index}
           data={item as QuestionBlockData}
@@ -1068,7 +1077,7 @@ function GuidedReflectionBlock({
 }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [responses, setResponses] = useState<string[]>(
-    previousAnswer?.responses ?? data.steps.map(() => "")
+    previousAnswer?.responses ?? (data.steps || []).map(() => "")
   );
 
   const handleResponse = (stepIndex: number, text: string) => {
@@ -1086,10 +1095,10 @@ function GuidedReflectionBlock({
     <ThemedView style={[styles.blockContainer, { backgroundColor: theme.background }]}>
       <Ionicons name="journal" size={32} color={theme.tint} style={styles.blockIcon} />
       <ThemedText type="subtitle" style={styles.guidedReflectionTitle}>
-        Guided Reflection ({currentStep + 1} of {data.steps.length})
+        Guided Reflection ({currentStep + 1} of {(data.steps || []).length})
       </ThemedText>
       <ThemedText style={styles.guidedReflectionPrompt}>
-        {data.steps[currentStep].prompt}
+        {(data.steps || [])[currentStep]?.prompt || ""}
       </ThemedText>
       <TextInput
         style={[
@@ -1127,18 +1136,18 @@ function GuidedReflectionBlock({
           </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setCurrentStep(Math.min(data.steps.length - 1, currentStep + 1))}
-          disabled={currentStep === data.steps.length - 1}
+          onPress={() => setCurrentStep(Math.min((data.steps || []).length - 1, currentStep + 1))}
+          disabled={currentStep === (data.steps || []).length - 1}
           style={[
             styles.guidedReflectionNavButton,
             { borderColor: theme.icon, backgroundColor: theme.background },
-            currentStep === data.steps.length - 1 && styles.guidedReflectionNavButtonDisabled,
+            currentStep === (data.steps || []).length - 1 && styles.guidedReflectionNavButtonDisabled,
           ]}
         >
           <ThemedText
             style={[
-              styles.guidedReflectionNavText,
-              currentStep === data.steps.length - 1 && { color: theme.icon },
+            styles.guidedReflectionNavText,
+            currentStep === (data.steps || []).length - 1 && { color: theme.icon },
             ]}
           >
             Next
@@ -1348,11 +1357,11 @@ function ListenAndSelectBlock({
       >
         <Ionicons name="play" size={32} color="#FFFFFF" />
       </TouchableOpacity>
-      {hasPlayed && (
+          {hasPlayed && (
         <>
           <ThemedText style={styles.listenSelectPrompt}>{data.prompt}</ThemedText>
           <View style={styles.optionsContainer}>
-            {data.options.map((option: string, index: number) => (
+            {(data.options || []).map((option: string, index: number) => (
               <TouchableOpacity
                 key={index}
               style={[
@@ -1437,7 +1446,7 @@ function SummaryBlock({ data, theme }: { data: SummaryBlockData; theme: any }) {
       <ThemedText type="subtitle" style={styles.summaryTitle}>
         Key Takeaways
       </ThemedText>
-      {data.key_takeaways.map((takeaway, index) => (
+      {(data.key_takeaways || []).map((takeaway, index) => (
         <View key={index} style={styles.takeawayItem}>
           <Ionicons name="checkmark" size={20} color={theme.tint} />
           <ThemedText style={styles.takeawayText}>{takeaway}</ThemedText>
@@ -1499,7 +1508,7 @@ function CompareContrastBlock({
           <ThemedText type="subtitle" style={styles.compareColumnTitle}>
             {data.left_title}
           </ThemedText>
-          {data.left_points.map((point, index) => (
+          {(data.left_points || []).map((point, index) => (
             <View key={index} style={styles.comparePoint}>
               <Ionicons name="ellipse" size={8} color={theme.tint} />
               <ThemedText style={styles.comparePointText}>{point}</ThemedText>
@@ -1510,7 +1519,7 @@ function CompareContrastBlock({
           <ThemedText type="subtitle" style={styles.compareColumnTitle}>
             {data.right_title}
           </ThemedText>
-          {data.right_points.map((point, index) => (
+          {(data.right_points || []).map((point, index) => (
             <View key={index} style={styles.comparePoint}>
               <Ionicons name="ellipse" size={8} color={theme.tint} />
               <ThemedText style={styles.comparePointText}>{point}</ThemedText>

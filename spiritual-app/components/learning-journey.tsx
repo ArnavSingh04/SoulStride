@@ -41,7 +41,7 @@ interface LessonNode {
 
 
 export default function LearningJourney({
-  holyBookId = "guru-granth-sahib",
+  holyBookId,
   onLessonPress,
 }: LearningJourneyProps) {
   const colorScheme = useColorScheme();
@@ -72,6 +72,16 @@ export default function LearningJourney({
     try {
       setLoading(true);
       setError(null);
+      
+      // If no holy book is selected, show empty state
+      if (!holyBookId) {
+        setAllLessons([]);
+        setDisplayedLessons([]);
+        setNodes([]);
+        setLoading(false);
+        return;
+      }
+      
       console.log('Loading lessons for holy book:', holyBookId);
       const data = await getAllLessons(holyBookId);
       console.log('Fetched lessons:', data.length, data);
@@ -187,7 +197,7 @@ export default function LearningJourney({
     }
 
     // Determine icon based on lesson type and blocks
-    const blockTypes = lesson.blocks.map((b: any) => b.block_type);
+    const blockTypes = (lesson.blocks || []).map((b: any) => b.block_type);
     if (blockTypes.includes("audio_recitation") || blockTypes.includes("repeat_practice")) {
       return "mic";
     }
@@ -245,6 +255,23 @@ export default function LearningJourney({
           </ThemedText>
           <ThemedText style={[styles.emptyText, { color: theme.icon, fontSize: 14 }]}>
             2. Run: npm run migrate:template-lessons
+          </ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // Show empty state when no holy book is selected
+  if (!holyBookId) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="book-outline" size={64} color={theme.icon} />
+          <ThemedText type="subtitle" style={styles.emptyTitle}>
+            No holy book selected
+          </ThemedText>
+          <ThemedText style={[styles.emptyText, { color: theme.icon }]}>
+            Please select a holy book in Settings to view your learning journey.
           </ThemedText>
         </View>
       </ThemedView>
