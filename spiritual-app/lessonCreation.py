@@ -155,7 +155,6 @@ def group_pauris_into_lessons(pauris: List[Pauri]) -> List[List[Pauri]]:
         p = pauris[i]
 
         # ✅ Special case: important chunk -> 1 pauri lesson
-        # (You can extend this later to other “important pauri IDs”.)
         if pauri_contains_important(p) and p.ang_start == 1:
             lessons.append([p])
             i += 1
@@ -222,27 +221,19 @@ def normalize_tags(tags: Any) -> List[str]:
         if not isinstance(t, str):
             continue
         s = t.strip().lower()
-        # Convert spaces to underscores for safer DB tags
         s = re.sub(r"\s+", "_", s)
-        # Strip weird punctuation
         s = re.sub(r"[^a-z0-9_\-]", "", s)
         if TAG_ALLOWED_RE.match(s):
             out.append(s)
-    # unique + keep order
     seen = set()
     uniq = []
     for t in out:
         if t not in seen:
             uniq.append(t)
             seen.add(t)
-    return uniq[:3]  # cap at 3 tags
+    return uniq[:3]
 
 def tag_pass(client: genai.Client, batch_payload: List[Dict[str, Any]], known_tags: List[str]) -> List[Dict[str, Any]]:
-    """
-    Dynamic tags:
-    - Model can propose new tags aligned with SGGS themes.
-    - We still keep output safe by normalizing & validating.
-    """
     prompt = f"""
 You are tagging Sikh scripture lesson chunks for an educational app.
 
@@ -250,8 +241,8 @@ Return STRICT JSON array, same length as input.
 Each output item:
 {{
   "id": "<same id>",
-  "tags": ["tag1","tag2","tag3"],   // 1-3 tags, short, lowercase, use underscore instead of spaces
-  "key_phrases": ["..."],          // 0-3 short phrases FROM the provided English meanings only
+  "tags": ["tag1","tag2","tag3"],
+  "key_phrases": ["..."],
   "tone": "neutral"
 }}
 
@@ -267,18 +258,12 @@ Input JSON:
 {json.dumps(batch_payload, ensure_ascii=False)}
 """.strip()
 
-    try:
-        resp = client.models.generate_content(
-            model=MODEL_TAGGER,
-            contents=prompt,
-        )
-        # Extract text from response - handle different response formats
-        response_text = resp.text if hasattr(resp, 'text') else str(resp)
-        return safe_json_load(response_text)
-    except Exception as e:
-        print(f"❌ Error in tag_pass: {e}")
-        print(f"⚠️  Prompt length: {len(prompt)} chars")
-        raise
+    resp = client.models.generate_content(
+        model=MODEL_TAGGER,
+        contents=prompt,
+    )
+    response_text = resp.text if hasattr(resp, "text") else str(resp)
+    return safe_json_load(response_text)
 
 def write_pass(client: genai.Client, batch_payload: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     schema_desc = """
@@ -331,18 +316,12 @@ Input JSON:
 {json.dumps(batch_payload, ensure_ascii=False)}
 """.strip()
 
-    try:
-        resp = client.models.generate_content(
-            model=MODEL_WRITER,
-            contents=prompt,
-        )
-        # Extract text from response - handle different response formats
-        response_text = resp.text if hasattr(resp, 'text') else str(resp)
-        return safe_json_load(response_text)
-    except Exception as e:
-        print(f"❌ Error in write_pass: {e}")
-        print(f"⚠️  Prompt length: {len(prompt)} chars")
-        raise
+    resp = client.models.generate_content(
+        model=MODEL_WRITER,
+        contents=prompt,
+    )
+    response_text = resp.text if hasattr(resp, "text") else str(resp)
+    return safe_json_load(response_text)
 
 
 # -----------------------------
@@ -367,7 +346,7 @@ def build_batches(lesson_groups: List[List[Pauri]]) -> List[List[Dict[str, Any]]
         payload = {
             "id": lesson_id,
             "source": {"pauri_indices": pauri_indices, "ang_range": {"start": ang_start, "end": ang_end}},
-            "english_meanings": english_only[:60],  # guardrail
+            "english_meanings": english_only[:60],
             "full_text": [pauri_text_block(p) for p in group],
         }
 
@@ -382,19 +361,18 @@ def build_batches(lesson_groups: List[List[Pauri]]) -> List[List[Dict[str, Any]]
     return batches
 
 def main():
-    """Main execution function."""
     print("🚀 Starting lesson creation pipeline...")
     print(f"📁 Input file: {INPUT_FILE}")
     print(f"📁 Output file: {OUTPUT_FILE}")
     print(f"☁️  Project: {PROJECT_ID}, Location: {LOCATION}")
     print(f"🤖 Models: Tagger={MODEL_TAGGER}, Writer={MODEL_WRITER}\n")
-    
+
     pages = load_pages(INPUT_FILE)
     lines = flatten_lines(pages)
     pauris = split_into_pauris(lines)
     lesson_groups = group_pauris_into_lessons(pauris)
     batches = build_batches(lesson_groups)
-    
+
     if not batches:
         print("⚠️  No batches to process. Check your input file.")
         return
@@ -406,39 +384,37 @@ def main():
     print(f"Batches (<= {LESSONS_PER_CALL} lessons per call): {len(batches)}")
 
     client = make_client()
-    
+
     try:
         all_lessons: List[Dict[str, Any]] = []
-        known_tags_registry: List[str] = ["hukam","haumai","naam","maya","seva","sat","sangat","vairag","kirpa","gian","prem","nimrata","oneness","truth","fearlessness","compassion","gratitude"]
+        known_tags_registry: List[str] = [
+            "hukam","haumai","naam","maya","seva","sat","sangat","vairag","kirpa","gian",
+            "prem","nimrata","oneness","truth","fearlessness","compassion","gratitude"
+        ]
 
         for bi, batch in enumerate(batches, start=1):
             print(f"\nBatch {bi}/{len(batches)}: {len(batch)} lessons")
 
-        # Pass 1: tags / key phrases (dynamic)
-        try:
+            # Pass 1: tags / key phrases
             tag_out_raw = tag_pass(
                 client,
                 [{"id": x["id"], "english_meanings": x["english_meanings"]} for x in batch],
                 known_tags_registry
             )
-        except Exception as e:
-            print(f"❌ Failed to tag batch {bi}: {e}")
-            raise
 
-            # Normalize tags + update registry
             if not isinstance(tag_out_raw, list):
                 raise ValueError(f"Expected list from tag_pass, got {type(tag_out_raw)}")
-            if len(tag_out_raw) != len(batch):
-                print(f"⚠️  Warning: Tag output length ({len(tag_out_raw)}) != batch length ({len(batch)})")
-            
+
             tag_map: Dict[str, Dict[str, Any]] = {}
             for item in tag_out_raw:
                 _id = item.get("id")
+                if not _id:
+                    continue
                 tags = normalize_tags(item.get("tags"))
                 key_phrases = item.get("key_phrases", [])
                 if not isinstance(key_phrases, list):
                     key_phrases = []
-                key_phrases = [str(x).strip()[:80] for x in key_phrases[:3] if isinstance(x, str) and x.strip()]
+                key_phrases = [x.strip()[:80] for x in key_phrases[:3] if isinstance(x, str) and x.strip()]
 
                 tag_map[_id] = {"tags": tags, "key_phrases": key_phrases, "tone": "neutral"}
 
@@ -459,33 +435,20 @@ def main():
                     "full_text": x["full_text"],
                 })
 
-            try:
-                lessons_out = write_pass(client, writer_in)
-            except Exception as e:
-                print(f"❌ Failed to generate lessons for batch {bi}: {e}")
-                raise
-            
+            lessons_out = write_pass(client, writer_in)
+
             if not isinstance(lessons_out, list):
                 raise ValueError(f"Expected list from write_pass, got {type(lessons_out)}")
-            if len(lessons_out) != len(batch):
-                print(f"⚠️  Warning: Lesson output length ({len(lessons_out)}) != batch length ({len(batch)})")
 
-            # Collect results + normalize IDs
             for item in lessons_out:
-                if "lesson_id" not in item:
-                    if "id" in item:
-                        item["lesson_id"] = item.pop("id")
+                if "lesson_id" not in item and "id" in item:
+                    item["lesson_id"] = item.pop("id")
                 all_lessons.append(item)
 
             time.sleep(SLEEP_BETWEEN_CALLS_SEC)
 
-        # Write output file
-        try:
-            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                json.dump(all_lessons, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"❌ Failed to write output file {OUTPUT_FILE}: {e}")
-            raise
+        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+            json.dump(all_lessons, f, ensure_ascii=False, indent=2)
 
         print(f"\n✅ Successfully created {len(all_lessons)} lessons")
         print(f"✅ Wrote lessons to: {OUTPUT_FILE}")
@@ -496,12 +459,11 @@ def main():
         print("   - Transform into Supabase tables (lessons + lesson_blocks)")
         print("   - Or store blocks in a JSONB column")
     finally:
-        # Clean up client resources
-        if hasattr(client, 'close'):
+        if hasattr(client, "close"):
             try:
                 client.close()
             except Exception:
-                pass  # Ignore cleanup errors
+                pass
 
 if __name__ == "__main__":
     main()
