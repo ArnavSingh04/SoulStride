@@ -1,12 +1,39 @@
+"""
+lessonCreation.py — Reliable SGGS -> Duolingo-like lesson generator (Vertex AI Gemini)
+
+Goals:
+- Deterministic lesson IDs (uuid5) so reruns resume cleanly
+- Checkpoint after every successful chunk (lessons.json grows while running)
+- JSON reliability:
+  - Request JSON mode via response_mime_type="application/json"
+  - Retries on JSON errors
+  - If still failing, automatically split batches smaller until it works
+  - If a single lesson keeps failing, skip it and continue (logged)
+
+Usage:
+  (venv) pip install google-genai
+  (venv) gcloud auth application-default login
+  (venv) set GOOGLE_CLOUD_PROJECT=...
+  (venv) set GOOGLE_CLOUD_LOCATION=us-central1
+  (venv) python lessonCreation.py
+
+Env vars:
+  SGGS_INPUT        (default: sggs.json)
+  LESSONS_OUTPUT    (default: lessons.json)
+  GEMINI_MODEL_TAGGER (default: gemini-2.0-flash)
+  GEMINI_MODEL_WRITER (default: gemini-2.0-flash)
+"""
+
 import os
 import re
 import json
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from google import genai
+
 
 # -----------------------------
 # Config
@@ -21,40 +48,37 @@ INPUT_FILE = os.environ.get("SGGS_INPUT", "sggs.json")
 OUTPUT_FILE = os.environ.get("LESSONS_OUTPUT", "lessons.json")
 
 # Lesson grouping
-LESSON_PAU_MIN = 1          # ✅ changed: minimum can be 1
-LESSON_PAU_TARGET_MIN = 2   # target 2–3 pauris normally
+LESSON_PAU_MIN = 1
+LESSON_PAU_TARGET_MIN = 2
 LESSON_PAU_TARGET_MAX = 3
 
 # How many lessons per API call (batching)
-LESSONS_PER_CALL = 8  # 8–10 is usually stable for strict JSON output
+LESSONS_PER_CALL = 8  # will auto-split down if JSON breaks
 
 # Throttling
-SLEEP_BETWEEN_CALLS_SEC = 0.25
+SLEEP_BETWEEN_CALLS_SEC = 0.20
 
 # Pauri boundary marker (commonly appears as ||1||)
 PAURI_RE = re.compile(r"\|\|\s*\d+\s*\|\|")
 
 # IMPORTANT chunk detection (to allow 1-pauri lessons for key openings)
 IMPORTANT_PATTERNS = [
-    # Punjabi / Gurmukhi common Ik Onkar forms:
     r"ੴ",
     r"੧ਓ",
-    r"੧੦",  # sometimes OCR-ish or font variants
-    # Transliteration / English common signals:
+    r"੧੦",
     r"\bik[-\s]?o?nkaar\b",
     r"One Universal Creator God",
     r"By Guru'?s Grace",
     r"\bMool Mantar\b",
 ]
-
 IMPORTANT_RE = re.compile("|".join(IMPORTANT_PATTERNS), re.IGNORECASE)
 
-# Dynamic tag validation
-TAG_ALLOWED_RE = re.compile(r"^[a-z0-9][a-z0-9_\-]{1,24}$")  # 2–25 chars, simple safe slug
+# Dynamic tag validation (2–25 chars, safe slug)
+TAG_ALLOWED_RE = re.compile(r"^[a-z0-9][a-z0-9_\-]{1,24}$")
 
 
 # -----------------------------
-# Helpers: parsing SGGS -> pauris
+# Data structures
 # -----------------------------
 @dataclass
 class Line:
@@ -64,26 +88,62 @@ class Line:
     english: str
     transliteration: str
 
+
 @dataclass
 class Pauri:
-    pauri_index: int   # sequential index in our parsing flow
+    pauri_index: int
     ang_start: int
     ang_end: int
     lines: List[Line]
 
+
+# -----------------------------
+# IO helpers
+# -----------------------------
 def load_pages(path: str) -> List[Dict[str, Any]]:
-    """Load SGGS pages from JSON file."""
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         print(f"❌ Input file not found: {path}")
-        print(f"💡 Set SGGS_INPUT environment variable or ensure '{path}' exists")
+        print(f"💡 Set SGGS_INPUT env var or ensure '{path}' exists in the current folder.")
         raise
     except json.JSONDecodeError as e:
         print(f"❌ Invalid JSON in {path}: {e}")
         raise
 
+
+def _safe_checkpoint_write(path: str, data: Any) -> None:
+    """Atomic checkpoint write so file never ends up partially written."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def _load_existing_output(path: str) -> Tuple[List[Dict[str, Any]], Set[str]]:
+    """Load lessons.json if present; returns (lessons, done_ids)."""
+    if not os.path.exists(path):
+        return [], set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, list):
+            return [], set()
+        done = set()
+        for it in loaded:
+            lid = it.get("lesson_id")
+            if isinstance(lid, str) and lid:
+                done.add(lid)
+        return loaded, done
+    except Exception as e:
+        print(f"⚠️  Could not load existing {path}: {e}")
+        return [], set()
+
+
+# -----------------------------
+# Parsing SGGS pages -> lines -> pauris
+# -----------------------------
 def normalize_line(obj: Dict[str, Any]) -> Optional[Line]:
     try:
         ang = int(obj.get("ang", obj.get("pageNumber", 0)) or 0)
@@ -93,9 +153,16 @@ def normalize_line(obj: Dict[str, Any]) -> Optional[Line]:
         translit = (obj.get("transliteration") or "").strip()
         if not punjabi and not english and not translit:
             return None
-        return Line(ang=ang, line_no=line_no, punjabi=punjabi, english=english, transliteration=translit)
+        return Line(
+            ang=ang,
+            line_no=line_no,
+            punjabi=punjabi,
+            english=english,
+            transliteration=translit,
+        )
     except Exception:
         return None
+
 
 def flatten_lines(pages: List[Dict[str, Any]]) -> List[Line]:
     out: List[Line] = []
@@ -107,9 +174,14 @@ def flatten_lines(pages: List[Dict[str, Any]]) -> List[Line]:
     out.sort(key=lambda x: (x.ang, x.line_no))
     return out
 
+
 def is_pauri_boundary(line: Line) -> bool:
-    # boundary marker may appear in Punjabi, transliteration, or English
-    return bool(PAURI_RE.search(line.punjabi) or PAURI_RE.search(line.transliteration) or PAURI_RE.search(line.english))
+    return bool(
+        PAURI_RE.search(line.punjabi)
+        or PAURI_RE.search(line.transliteration)
+        or PAURI_RE.search(line.english)
+    )
+
 
 def split_into_pauris(lines: List[Line]) -> List[Pauri]:
     pauris: List[Pauri] = []
@@ -119,59 +191,46 @@ def split_into_pauris(lines: List[Line]) -> List[Pauri]:
         buf.append(ln)
         if is_pauri_boundary(ln):
             idx += 1
-            pauris.append(Pauri(
-                pauri_index=idx,
-                ang_start=buf[0].ang,
-                ang_end=buf[-1].ang,
-                lines=buf
-            ))
+            pauris.append(Pauri(idx, buf[0].ang, buf[-1].ang, buf))
             buf = []
     if buf:
         idx += 1
-        pauris.append(Pauri(
-            pauri_index=idx,
-            ang_start=buf[0].ang,
-            ang_end=buf[-1].ang,
-            lines=buf
-        ))
+        pauris.append(Pauri(idx, buf[0].ang, buf[-1].ang, buf))
     return pauris
 
+
 def pauri_contains_important(p: Pauri) -> bool:
-    # Search across Punjabi + English + transliteration for importance signals
     for ln in p.lines:
         blob = f"{ln.punjabi}\n{ln.transliteration}\n{ln.english}"
         if IMPORTANT_RE.search(blob):
             return True
     return False
 
+
 def group_pauris_into_lessons(pauris: List[Pauri]) -> List[List[Pauri]]:
     """
     Default: 2–3 pauris per lesson.
-    Special: allow 1-pauri lessons for important segments (e.g., Mool Mantar).
+    Special: allow 1-pauri for important opening at ang 1.
     """
     lessons: List[List[Pauri]] = []
     i = 0
     while i < len(pauris):
         p = pauris[i]
 
-        # ✅ Special case: important chunk -> 1 pauri lesson
         if pauri_contains_important(p) and p.ang_start == 1:
             lessons.append([p])
             i += 1
             continue
 
-        # Normal grouping: target 2–3
-        take = LESSON_PAU_TARGET_MAX
-        group = pauris[i:i+take]
-
-        # If remaining is small, still allow 1+ at end
+        group = pauris[i : i + LESSON_PAU_TARGET_MAX]
         if len(group) < LESSON_PAU_TARGET_MIN:
-            group = pauris[i:i+LESSON_PAU_MIN]
+            group = pauris[i : i + LESSON_PAU_MIN]
 
         lessons.append(group)
         i += len(group)
 
     return lessons
+
 
 def pauri_text_block(p: Pauri) -> str:
     parts = []
@@ -186,32 +245,87 @@ def pauri_text_block(p: Pauri) -> str:
 
 
 # -----------------------------
-# Vertex AI (Gemini)
+# Deterministic lesson IDs (uuid5)
+# -----------------------------
+def deterministic_lesson_id(ang_start: int, ang_end: int, pauri_indices: List[int]) -> str:
+    key = f"{ang_start}-{ang_end}-" + ",".join(map(str, pauri_indices))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
+
+
+# -----------------------------
+# Gemini helpers (JSON mode + retries)
 # -----------------------------
 def make_client() -> genai.Client:
-    """Create Vertex AI client with proper authentication."""
-    try:
-        return genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
-    except Exception as e:
-        print(f"❌ Failed to create Vertex AI client: {e}")
-        print(f"💡 Ensure you have:")
-        print(f"   - Set GOOGLE_CLOUD_PROJECT environment variable (current: {PROJECT_ID})")
-        print(f"   - Set GOOGLE_CLOUD_LOCATION environment variable (current: {LOCATION})")
-        print(f"   - Authenticated with 'gcloud auth application-default login'")
-        print(f"   - Enabled Vertex AI API in your GCP project")
-        raise
+    return genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+
 
 def safe_json_load(text: str) -> Any:
-    """Safely parse JSON from model response, handling markdown code blocks."""
+    """
+    Parse JSON from model response.
+    Tries to salvage by extracting outermost [] or {} if response contains extra junk.
+    """
+    text = (text or "").strip()
+
+    # strip markdown fences if they appear
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE).strip()
+
     try:
-        text = text.strip()
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
-        text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
         return json.loads(text)
-    except json.JSONDecodeError as e:
-        print(f"⚠️  JSON parse error: {e}")
-        print(f"⚠️  Response text (first 500 chars): {text[:500]}")
+    except json.JSONDecodeError:
+        # salvage attempt: trim to outermost array/object
+        for lch, rch in (("[", "]"), ("{", "}")):
+            s = text.find(lch)
+            e = text.rfind(rch)
+            if s != -1 and e != -1 and e > s:
+                snippet = text[s : e + 1]
+                try:
+                    return json.loads(snippet)
+                except json.JSONDecodeError:
+                    pass
         raise
+
+
+def _gen_json(client: genai.Client, model: str, prompt: str, *, temperature: float) -> Any:
+    """
+    Request JSON mode via response_mime_type. This is the single biggest reliability boost.
+    """
+    resp = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config={
+            "response_mime_type": "application/json",
+            "temperature": temperature,
+        },
+    )
+    response_text = resp.text if hasattr(resp, "text") else str(resp)
+    return safe_json_load(response_text)
+
+
+def _gen_json_with_retries(
+    client: genai.Client,
+    model: str,
+    prompt: str,
+    *,
+    attempts: int = 3,
+    temperature: float = 0.2,
+) -> Any:
+    last_err: Optional[Exception] = None
+    p = prompt
+    for i in range(1, attempts + 1):
+        try:
+            # become stricter on subsequent attempts
+            t = 0.0 if i > 1 else temperature
+            return _gen_json(client, model, p, temperature=t)
+        except Exception as e:
+            last_err = e
+            p = (
+                p
+                + "\n\nCRITICAL: Output MUST be VALID JSON ONLY. No prose. No markdown fences. "
+                "No trailing commas. All strings must be properly escaped. Return the JSON array only."
+            )
+    raise last_err if last_err else RuntimeError("Unknown JSON generation failure")
+
 
 def normalize_tags(tags: Any) -> List[str]:
     if not isinstance(tags, list):
@@ -225,6 +339,7 @@ def normalize_tags(tags: Any) -> List[str]:
         s = re.sub(r"[^a-z0-9_\-]", "", s)
         if TAG_ALLOWED_RE.match(s):
             out.append(s)
+    # unique + keep order
     seen = set()
     uniq = []
     for t in out:
@@ -232,6 +347,7 @@ def normalize_tags(tags: Any) -> List[str]:
             uniq.append(t)
             seen.add(t)
     return uniq[:3]
+
 
 def tag_pass(client: genai.Client, batch_payload: List[Dict[str, Any]], known_tags: List[str]) -> List[Dict[str, Any]]:
     prompt = f"""
@@ -241,50 +357,39 @@ Return STRICT JSON array, same length as input.
 Each output item:
 {{
   "id": "<same id>",
-  "tags": ["tag1","tag2","tag3"],
-  "key_phrases": ["..."],
+  "tags": ["tag1","tag2","tag3"],   // 1-3 tags, short, lowercase, underscore for spaces
+  "key_phrases": ["..."],          // 0-3 short phrases FROM the provided English meanings only
   "tone": "neutral"
 }}
 
-Guidelines for tags:
-- Prefer concise conceptual themes found in SGGS (e.g., oneness, truth, hukam, ego, naam, maya, fearlessness, compassion, humility, remembrance, detachment, service, gratitude).
-- You MAY introduce new tags if needed, but keep them short and general.
-- Avoid niche, long, or overly specific tags.
-- Use ONLY English meanings provided; do NOT translate Punjabi; do NOT add history or new claims.
+Guidelines:
+- Prefer concise SGGS themes (oneness, truth, hukam, ego, naam, maya, fearlessness, compassion, humility, remembrance, detachment, service, gratitude).
+- You MAY introduce new tags; keep them short and general.
+- Use ONLY English meanings provided; do NOT translate Punjabi; do NOT add history/new claims.
 
-Known tags so far (optional guidance): {known_tags[:50]}
+Known tags (optional guidance): {known_tags[:50]}
 
 Input JSON:
 {json.dumps(batch_payload, ensure_ascii=False)}
 """.strip()
 
-    resp = client.models.generate_content(
-        model=MODEL_TAGGER,
-        contents=prompt,
-    )
-    response_text = resp.text if hasattr(resp, "text") else str(resp)
-    return safe_json_load(response_text)
+    out = _gen_json_with_retries(client, MODEL_TAGGER, prompt, attempts=3, temperature=0.2)
+    if not isinstance(out, list):
+        raise ValueError(f"Expected list from tag_pass, got {type(out)}")
+    return out
+
 
 def write_pass(client: genai.Client, batch_payload: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     schema_desc = """
 Return STRICT JSON array. Each item must be:
 {
   "lesson_id": "<id>",
-  "source": {
-    "pauri_indices": [1,2,3],
-    "ang_range": {"start": 1, "end": 1}
-  },
+  "source": {"pauri_indices":[...], "ang_range":{"start":1,"end":1}},
   "tags": ["..."],
   "blocks": [
     {"type":"guided_reading","text":"..."},
     {"type":"meaning","text":"..."},
-    {
-      "type":"situation",
-      "scenario":"...",
-      "choices":[{"id":"A","text":"..."},{"id":"B","text":"..."}],
-      "best_choice":"A",
-      "why":"..."
-    },
+    {"type":"situation","scenario":"...","choices":[{"id":"A","text":"..."},{"id":"B","text":"..."}],"best_choice":"A","why":"..."},
     {"type":"check","question":"...","answer":"..."},
     {"type":"close","text":"..."}
   ]
@@ -300,53 +405,72 @@ IMPORTANT RULES:
 - Tone: neutral, contemplative, non-judgmental. Avoid moralizing ("must/should") language.
 - Situations must be everyday, safe, non-political, non-violent, non-sexual, non-criminal.
 - Keep each text field short (1–3 sentences).
-- Output MUST be valid JSON, no extra commentary.
+- Output MUST be valid JSON array ONLY.
 
 Lesson skeleton (always):
-1) guided_reading (1–2 sentences: what is conveyed)
-2) meaning (2–4 sentences: plain explanation)
+1) guided_reading (1–2 sentences)
+2) meaning (2–4 sentences)
 3) situation (2–3 sentences + A/B + 1 sentence why tied to tags)
 4) check (one simple Q&A)
 5) close (one short takeaway)
 
-You will receive a JSON array; generate lessons for each element.
 {schema_desc}
 
 Input JSON:
 {json.dumps(batch_payload, ensure_ascii=False)}
 """.strip()
 
-    resp = client.models.generate_content(
-        model=MODEL_WRITER,
-        contents=prompt,
-    )
-    response_text = resp.text if hasattr(resp, "text") else str(resp)
-    return safe_json_load(response_text)
+    out = _gen_json_with_retries(client, MODEL_WRITER, prompt, attempts=3, temperature=0.2)
+    if not isinstance(out, list):
+        raise ValueError(f"Expected list from write_pass, got {type(out)}")
+    return out
+
+
+def _split_and_write_pass(client: genai.Client, writer_in: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    If JSON parsing fails or model returns malformed JSON for a big chunk,
+    split into smaller chunks until it succeeds. Never stops the whole run.
+    """
+    try:
+        return write_pass(client, writer_in)
+    except Exception as e:
+        # base case: single item still failing -> skip it (log and continue)
+        if len(writer_in) <= 1:
+            one = writer_in[0] if writer_in else {}
+            sid = one.get("id")
+            src = one.get("source")
+            print(f"⚠️  Skipping 1 lesson due to repeated failure. id={sid} source={src} err={e}")
+            return []
+        mid = len(writer_in) // 2
+        left = _split_and_write_pass(client, writer_in[:mid])
+        right = _split_and_write_pass(client, writer_in[mid:])
+        return left + right
 
 
 # -----------------------------
-# Main pipeline
+# Batch building
 # -----------------------------
 def build_batches(lesson_groups: List[List[Pauri]]) -> List[List[Dict[str, Any]]]:
     batches: List[List[Dict[str, Any]]] = []
     current: List[Dict[str, Any]] = []
 
     for group in lesson_groups:
-        lesson_id = str(uuid.uuid4())
         ang_start = min(p.ang_start for p in group)
         ang_end = max(p.ang_end for p in group)
         pauri_indices = [p.pauri_index for p in group]
 
-        english_only = []
+        lesson_id = deterministic_lesson_id(ang_start, ang_end, pauri_indices)
+
+        english_only: List[str] = []
         for p in group:
             for ln in p.lines:
                 if ln.english:
                     english_only.append(ln.english)
 
         payload = {
-            "id": lesson_id,
+            "id": lesson_id,  # deterministic
             "source": {"pauri_indices": pauri_indices, "ang_range": {"start": ang_start, "end": ang_end}},
-            "english_meanings": english_only[:60],
+            "english_meanings": english_only[:60],  # guardrail
             "full_text": [pauri_text_block(p) for p in group],
         }
 
@@ -360,6 +484,10 @@ def build_batches(lesson_groups: List[List[Pauri]]) -> List[List[Dict[str, Any]]
 
     return batches
 
+
+# -----------------------------
+# Main
+# -----------------------------
 def main():
     print("🚀 Starting lesson creation pipeline...")
     print(f"📁 Input file: {INPUT_FILE}")
@@ -386,24 +514,45 @@ def main():
     client = make_client()
 
     try:
-        all_lessons: List[Dict[str, Any]] = []
+        # Resume + dedupe
+        all_lessons, done_ids = _load_existing_output(OUTPUT_FILE)
+        lesson_map: Dict[str, Dict[str, Any]] = {}
+
+        # load existing into map (dedupe by lesson_id)
+        for it in all_lessons:
+            lid = it.get("lesson_id")
+            if isinstance(lid, str) and lid:
+                lesson_map[lid] = it
+
+        if lesson_map:
+            print(f"↩️  Resuming: loaded {len(lesson_map)} unique lessons from {OUTPUT_FILE}")
+        done_ids = set(lesson_map.keys())
+
         known_tags_registry: List[str] = [
-            "hukam","haumai","naam","maya","seva","sat","sangat","vairag","kirpa","gian",
-            "prem","nimrata","oneness","truth","fearlessness","compassion","gratitude"
+            "hukam", "haumai", "naam", "maya", "seva", "sat", "sangat", "vairag",
+            "kirpa", "gian", "prem", "nimrata", "oneness", "truth",
+            "fearlessness", "compassion", "gratitude",
         ]
 
         for bi, batch in enumerate(batches, start=1):
-            print(f"\nBatch {bi}/{len(batches)}: {len(batch)} lessons")
+            pending = [x for x in batch if x["id"] not in done_ids]
+            if not pending:
+                print(f"\nBatch {bi}/{len(batches)}: ✅ already done, skipping")
+                continue
 
-            # Pass 1: tags / key phrases
-            tag_out_raw = tag_pass(
-                client,
-                [{"id": x["id"], "english_meanings": x["english_meanings"]} for x in batch],
-                known_tags_registry
-            )
+            print(f"\nBatch {bi}/{len(batches)}: {len(pending)} lessons")
 
-            if not isinstance(tag_out_raw, list):
-                raise ValueError(f"Expected list from tag_pass, got {type(tag_out_raw)}")
+            # Pass 1: tags
+            try:
+                tag_out_raw = tag_pass(
+                    client,
+                    [{"id": x["id"], "english_meanings": x["english_meanings"]} for x in pending],
+                    known_tags_registry,
+                )
+            except Exception as e:
+                # If tagger fails, we still continue by using empty tags (don't stop run)
+                print(f"⚠️  Tagger failed for batch {bi}; continuing with empty tags. err={e}")
+                tag_out_raw = []
 
             tag_map: Dict[str, Dict[str, Any]] = {}
             for item in tag_out_raw:
@@ -422,9 +571,9 @@ def main():
                     if t not in known_tags_registry:
                         known_tags_registry.append(t)
 
-            # Pass 2: lesson generation
-            writer_in = []
-            for x in batch:
+            # Pass 2: writer input
+            writer_in: List[Dict[str, Any]] = []
+            for x in pending:
                 t = tag_map.get(x["id"], {"tags": [], "key_phrases": [], "tone": "neutral"})
                 writer_in.append({
                     "id": x["id"],
@@ -435,35 +584,63 @@ def main():
                     "full_text": x["full_text"],
                 })
 
-            lessons_out = write_pass(client, writer_in)
+            # Robust: JSON-mode + retries + split if needed; never stops whole run
+            lessons_out = _split_and_write_pass(client, writer_in)
 
-            if not isinstance(lessons_out, list):
-                raise ValueError(f"Expected list from write_pass, got {type(lessons_out)}")
-
+            # Accept only items that have/derive a lesson_id
+            added = 0
             for item in lessons_out:
+                # normalize id
                 if "lesson_id" not in item and "id" in item:
                     item["lesson_id"] = item.pop("id")
-                all_lessons.append(item)
+
+                lid = item.get("lesson_id")
+                if not isinstance(lid, str) or not lid:
+                    continue
+
+                # enforce deterministic ids: if model returns wrong id, fix it from input source
+                # (use the same deterministic id as our payload id when possible)
+                # If writer returns mismatch, we prefer our deterministic id by matching source.
+                src = item.get("source") or {}
+                ang = src.get("ang_range") or {}
+                pi = src.get("pauri_indices") or []
+                try:
+                    if isinstance(pi, list) and isinstance(ang.get("start"), int) and isinstance(ang.get("end"), int):
+                        expected = deterministic_lesson_id(int(ang["start"]), int(ang["end"]), [int(x) for x in pi])
+                        item["lesson_id"] = expected
+                        lid = expected
+                except Exception:
+                    pass
+
+                if lid in done_ids:
+                    continue
+
+                lesson_map[lid] = item
+                done_ids.add(lid)
+                added += 1
+
+            # checkpoint after each batch
+            out_list = list(lesson_map.values())
+            _safe_checkpoint_write(OUTPUT_FILE, out_list)
+            print(f"✅ Batch {bi} checkpointed. Added {added} new lessons. Total now: {len(out_list)}")
 
             time.sleep(SLEEP_BETWEEN_CALLS_SEC)
 
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            json.dump(all_lessons, f, ensure_ascii=False, indent=2)
+        out_list = list(lesson_map.values())
+        _safe_checkpoint_write(OUTPUT_FILE, out_list)
 
-        print(f"\n✅ Successfully created {len(all_lessons)} lessons")
-        print(f"✅ Wrote lessons to: {OUTPUT_FILE}")
-        print(f"✅ Discovered {len(known_tags_registry)} unique tags")
-        print(f"📋 Tags: {', '.join(known_tags_registry[:20])}{'...' if len(known_tags_registry) > 20 else ''}")
-        print("\n💡 Next steps:")
-        print("   - Review lessons.json for quality")
-        print("   - Transform into Supabase tables (lessons + lesson_blocks)")
-        print("   - Or store blocks in a JSONB column")
+        print(f"\n✅ Done. Total lessons: {len(out_list)}")
+        print(f"✅ Output: {OUTPUT_FILE}")
+        print(f"✅ Tags discovered: {len(known_tags_registry)}")
+        print(f"📋 Tags sample: {', '.join(known_tags_registry[:20])}{'...' if len(known_tags_registry) > 20 else ''}")
+
     finally:
         if hasattr(client, "close"):
             try:
                 client.close()
             except Exception:
                 pass
+
 
 if __name__ == "__main__":
     main()
