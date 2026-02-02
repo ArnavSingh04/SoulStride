@@ -76,6 +76,8 @@ export interface Lesson {
   description?: string;
   order_index: number;
   unlock_after_lesson_id?: string;
+  source?: { pauri_indices?: number[]; ang_range?: { start: number; end: number } } | null;
+  tags?: string[] | null;
   created_at?: string;
   updated_at?: string;
 }

@@ -88,7 +88,7 @@ export default function LessonViewer({
 
           <View style={styles.headerCenter}>
             <ThemedText type="subtitle" style={styles.lessonTitle} numberOfLines={1}>
-              {lesson.title || "Lesson"}
+              {lesson.title || (lesson.tags?.length ? lesson.tags.join(', ') : 'Lesson')}
             </ThemedText>
             <ThemedText style={[styles.progressText, { color: theme.icon }]}>
               {currentBlockIndex + 1} of {totalBlocks}

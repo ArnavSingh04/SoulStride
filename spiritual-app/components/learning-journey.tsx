@@ -14,7 +14,8 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getAllLessons, type LessonWithBlocks } from "@/lib/database.service";
+import { getLessonsPaginated } from "@/lib/database.service";
+import type { LessonWithBlocks } from "@/lib/database.types";
 
 const { width, height } = Dimensions.get("window");
 const NODE_SIZE = 64;
@@ -46,8 +47,7 @@ export default function LearningJourney({
 }: LearningJourneyProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
-  const [allLessons, setAllLessons] = useState<LessonWithBlocks[]>([]); // All lessons from DB
-  const [displayedLessons, setDisplayedLessons] = useState<LessonWithBlocks[]>([]); // Currently displayed
+  const [displayedLessons, setDisplayedLessons] = useState<LessonWithBlocks[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -72,57 +72,32 @@ export default function LearningJourney({
     try {
       setLoading(true);
       setError(null);
-      
-      // If no holy book is selected, show empty state
+
       if (!holyBookId) {
-        setAllLessons([]);
-        setDisplayedLessons([]);
-        setNodes([]);
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Loading lessons for holy book:', holyBookId);
-      const data = await getAllLessons(holyBookId);
-      console.log('Fetched lessons:', data.length, data);
-      
-      if (!data || data.length === 0) {
-        setError('No lessons found. Please run: npm run migrate:template-lessons');
-        setAllLessons([]);
         setDisplayedLessons([]);
         setNodes([]);
         setLoading(false);
         return;
       }
 
-      // Sort all lessons by order_index and deduplicate by order_index
-      // If multiple lessons have the same order_index, keep only the first one
-      const seenOrderIndices = new Set<number>();
-      const sortedLessons = [...data]
-        .sort((a: LessonWithBlocks, b: LessonWithBlocks) => a.order_index - b.order_index)
-        .filter(lesson => {
-          if (seenOrderIndices.has(lesson.order_index)) {
-            console.warn(`Duplicate order_index ${lesson.order_index} found for lesson: ${lesson.id}. Skipping duplicate.`);
-            return false;
-          }
-          seenOrderIndices.add(lesson.order_index);
-          return true;
-        });
-      setAllLessons(sortedLessons);
-      
-      console.log('Total lessons available:', sortedLessons.length);
-      
-      // Load first batch
-      const firstBatch = sortedLessons.slice(0, LESSONS_PER_BATCH);
-      setDisplayedLessons(firstBatch);
-      setHasMore(sortedLessons.length > LESSONS_PER_BATCH);
-      generateNodes(firstBatch);
-      
+      const { lessons, hasMore: more } = await getLessonsPaginated(holyBookId, LESSONS_PER_BATCH, 0);
+
+      if (!lessons || lessons.length === 0) {
+        setError('No lessons found. Run: npm run migrate:lessons-from-json:clear (after clearing, or npm run migrate:lessons-from-json to add from lessons.json)');
+        setDisplayedLessons([]);
+        setNodes([]);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
+      setDisplayedLessons(lessons);
+      setHasMore(more);
+      generateNodes(lessons);
     } catch (err) {
       console.error("Error loading lessons:", err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(`Failed to load lessons: ${errorMessage}. Please check your database connection and ensure tables exist.`);
-      setAllLessons([]);
       setDisplayedLessons([]);
       setNodes([]);
     } finally {
@@ -130,21 +105,27 @@ export default function LearningJourney({
     }
   };
 
-  const loadMoreLessons = () => {
-    if (loadingMore || !hasMore || allLessons.length === 0) return;
-    
+  const loadMoreLessons = async () => {
+    if (loadingMore || !hasMore || !holyBookId) return;
+
     setLoadingMore(true);
-    const startIndex = displayedLessons.length;
-    const endIndex = Math.min(startIndex + LESSONS_PER_BATCH, allLessons.length);
-    const newLessons = allLessons.slice(startIndex, endIndex);
-    
-    setDisplayedLessons(prev => {
-      const updated = [...prev, ...newLessons];
-      generateNodes(updated);
-      return updated;
-    });
-    setHasMore(endIndex < allLessons.length);
-    setLoadingMore(false);
+    try {
+      const offset = displayedLessons.length;
+      const { lessons, hasMore: more } = await getLessonsPaginated(holyBookId, LESSONS_PER_BATCH, offset);
+
+      if (lessons.length > 0) {
+        setDisplayedLessons(prev => {
+          const updated = [...prev, ...lessons];
+          generateNodes(updated);
+          return updated;
+        });
+      }
+      setHasMore(more);
+    } catch (err) {
+      console.error("Error loading more lessons:", err);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const generateNodes = (lessonsToDisplay: LessonWithBlocks[]) => {
@@ -176,13 +157,13 @@ export default function LearningJourney({
 
   const handleScroll = (event: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 200; // Trigger loading when 200px from bottom
-    
+    const paddingToBottom = 200;
+
     if (
       layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom &&
       hasMore &&
       !loadingMore &&
-      allLessons.length > 0
+      holyBookId
     ) {
       loadMoreLessons();
     }
@@ -254,7 +235,7 @@ export default function LearningJourney({
             1. Created the database tables (run the SQL schema)
           </ThemedText>
           <ThemedText style={[styles.emptyText, { color: theme.icon, fontSize: 14 }]}>
-            2. Run: npm run migrate:template-lessons
+            2. Run: npm run migrate:lessons-from-json:clear (or migrate:lessons-from-json)
           </ThemedText>
         </View>
       </ThemedView>
@@ -278,7 +259,7 @@ export default function LearningJourney({
     );
   }
 
-  if (!loading && allLessons.length === 0) {
+  if (!loading && displayedLessons.length === 0) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.emptyContainer}>
@@ -290,21 +271,15 @@ export default function LearningJourney({
             Your learning journey will appear here once lessons are created.
           </ThemedText>
           <ThemedText style={[styles.emptyText, { color: theme.icon, marginTop: 16, fontSize: 14 }]}>
-            Run: npm run migrate:template-lessons
+            Run: npm run migrate:lessons-from-json:clear (or migrate:lessons-from-json)
           </ThemedText>
         </View>
       </ThemedView>
     );
   }
 
-  // Calculate content height based on all lessons (for proper scrolling)
-  const totalLessons = allLessons.length;
-  const estimatedContentHeight = totalLessons > 0
-    ? 20 + totalLessons * (NODE_SIZE + NODE_SPACING + LABEL_HEIGHT) + 100
-    : height;
-  
-  // Current displayed content height
-  const currentContentHeight = nodes.length > 0 
+  // Content height from currently loaded nodes (grows as user scrolls and we load more)
+  const currentContentHeight = nodes.length > 0
     ? nodes[nodes.length - 1].y + NODE_SIZE + LABEL_HEIGHT + 100
     : height;
 
@@ -312,7 +287,7 @@ export default function LearningJourney({
     <ThemedView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { minHeight: estimatedContentHeight }]}
+        contentContainerStyle={[styles.scrollContent, { minHeight: currentContentHeight }]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={400}
@@ -326,12 +301,12 @@ export default function LearningJourney({
         }
       >
         {/* Learning Path - Continuous flow */}
-        <View style={[styles.pathContainer, { minHeight: estimatedContentHeight }]}>
+        <View style={[styles.pathContainer, { minHeight: currentContentHeight }]}>
           {/* Single SVG for all connection paths */}
           <Svg
             style={styles.pathSvg}
             width={width}
-            height={estimatedContentHeight}
+            height={currentContentHeight}
           >
             {nodes.map((node, nodeIndex) => {
               const isLast = nodeIndex === nodes.length - 1;
@@ -456,7 +431,7 @@ export default function LearningJourney({
                       ellipsizeMode="tail"
                       adjustsFontSizeToFit={false}
                     >
-                      {node.lesson.title || node.lesson.learning_objective || 'Lesson'}
+                      {node.lesson.title || node.lesson.learning_objective || (node.lesson.tags?.length ? node.lesson.tags.slice(0, 2).join(', ') : `Lesson ${node.lesson.order_index}`)}
                     </ThemedText>
                   </View>
                 </View>

@@ -138,10 +138,11 @@ CREATE POLICY "Allow public delete on prayer_lines" ON prayer_lines FOR DELETE U
 
 -- Table: lessons
 -- Stores structured lessons for learning journey (similar to Duolingo)
+-- source/tags match lessons.json from lessonCreation.py
 CREATE TABLE IF NOT EXISTS lessons (
   id VARCHAR(100) PRIMARY KEY,
   holy_book_id VARCHAR(100) NOT NULL REFERENCES holy_books(id) ON DELETE CASCADE,
-  section VARCHAR(255) NOT NULL, -- e.g., "Japji Sahib", "Rehras Sahib"
+  section VARCHAR(255) NOT NULL DEFAULT 'Learning Path', -- e.g., "Japji Sahib", "Learning Path"
   lesson_type VARCHAR(50), -- e.g., "precision", "meaning", "practice"
   difficulty INTEGER DEFAULT 1 CHECK (difficulty >= 1 AND difficulty <= 5),
   estimated_time_min INTEGER DEFAULT 5,
@@ -149,8 +150,10 @@ CREATE TABLE IF NOT EXISTS lessons (
   title VARCHAR(255),
   title_punjabi VARCHAR(255),
   description TEXT,
-  order_index INTEGER NOT NULL, -- Order within section
+  order_index INTEGER NOT NULL, -- Order within section (array index from lessons.json)
   unlock_after_lesson_id VARCHAR(100) REFERENCES lessons(id) ON DELETE SET NULL, -- Dependency
+  source JSONB, -- { pauri_indices, ang_range } from lessons.json
+  tags JSONB, -- string[] from lessons.json
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

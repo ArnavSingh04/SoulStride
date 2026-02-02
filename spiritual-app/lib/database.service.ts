@@ -285,6 +285,57 @@ export async function getTotalPages(): Promise<number> {
 
 // ============== LESSONS ==============
 
+/** Fetch lessons with pagination (for learning journey infinite scroll). Returns one page and whether more exist. */
+export async function getLessonsPaginated(
+  holyBookId: string,
+  limit: number,
+  offset: number
+): Promise<{ lessons: LessonWithBlocks[]; hasMore: boolean }> {
+  try {
+    const { data: lessons, error: lessonsError } = await supabase
+      .from('lessons')
+      .select('*')
+      .eq('holy_book_id', holyBookId)
+      .order('order_index')
+      .range(offset, offset + limit - 1);
+
+    if (lessonsError) {
+      if (lessonsError.code === '42P01' || lessonsError.message?.includes('does not exist')) {
+        throw new Error('Lessons table does not exist. Please run the database schema migration first.');
+      }
+      throw new Error(`Database error: ${lessonsError.message || 'Unknown error'}`);
+    }
+
+    if (!lessons || lessons.length === 0) {
+      return { lessons: [], hasMore: false };
+    }
+
+    const lessonsWithBlocks = await Promise.all(
+      lessons.map(async (lesson) => {
+        const { data: blocks, error: blocksError } = await supabase
+          .from('lesson_blocks')
+          .select('*')
+          .eq('lesson_id', lesson.id)
+          .order('block_order');
+
+        if (blocksError) {
+          console.error(`Error fetching blocks for lesson ${lesson.id}:`, blocksError);
+          return { ...lesson, blocks: [] };
+        }
+        return { ...lesson, blocks: blocks || [] };
+      })
+    );
+
+    return {
+      lessons: lessonsWithBlocks,
+      hasMore: lessons.length === limit,
+    };
+  } catch (error) {
+    console.error('Error in getLessonsPaginated:', error);
+    throw error;
+  }
+}
+
 export async function getAllLessons(holyBookId?: string, section?: string): Promise<LessonWithBlocks[]> {
   try {
     let query = supabase
