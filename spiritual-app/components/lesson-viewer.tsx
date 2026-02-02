@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -33,6 +33,14 @@ export default function LessonViewer({
   const theme = Colors[colorScheme ?? "light"];
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
   const [blockAnswers, setBlockAnswers] = useState<Record<number, any>>({});
+
+  // Start from first slide whenever a new lesson is opened
+  useEffect(() => {
+    if (lesson?.id) {
+      setCurrentBlockIndex(0);
+      setBlockAnswers({});
+    }
+  }, [lesson?.id]);
 
   if (!lesson) {
     return null;
