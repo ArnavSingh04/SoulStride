@@ -19,14 +19,19 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { loadUserProfile } from "@/services/user-profile";
-import { 
-  loadRoutineConfig, 
+import { loadPrayerPreferences } from "@/services/prayer-preferences";
+import { getLessonProgressUserId } from "@/services/lesson-progress-user";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  loadRoutineConfig,
   getTodayStats,
   getTodayDate,
   loadTodayCompletion
 } from "@/services/routine-storage";
 import { getAllPrayers, getPrayerById } from "@/data/prayers";
 import type { PrayerWithLines } from "@/data/prayers";
+import { getNextLessonForUser } from "@/lib/database.service";
+import type { LessonWithBlocks } from "@/lib/database.types";
 import { TIME_SLOT_LABELS } from "@/types/routine";
 import type { TimeSlot } from "@/types/routine";
 
@@ -38,9 +43,9 @@ async function calculateStreak(): Promise<number> {
     const today = getTodayDate();
     const completion = await loadTodayCompletion();
     const config = await loadRoutineConfig();
-    
+
     if (!config) return 0;
-    
+
     const stats = await getTodayStats(config);
     if (stats.total > 0 && stats.completed === stats.total) {
       return 7; // Placeholder - would calculate from history
@@ -70,31 +75,42 @@ function getMotivationalMessage(progress: number): string {
 }
 
 // Get next prayer in routine
-async function getNextPrayer(): Promise<{ prayer: PrayerWithLines; timeSlot: TimeSlot } | null> {
+async function getNextPrayer(): Promise<{
+  prayer: PrayerWithLines;
+  timeSlot: TimeSlot;
+} | null> {
   try {
     const config = await loadRoutineConfig();
     if (!config) return null;
 
     const completion = await loadTodayCompletion();
     const today = getTodayDate();
-    
+
     if (completion.date !== today) return null;
 
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    const timeSlots: TimeSlot[] = ['amrit-vayla', 'morning', 'evening', 'night'];
-    
+    const timeSlots: TimeSlot[] = [
+      "amrit-vayla",
+      "morning",
+      "evening",
+      "night"
+    ];
+
     for (const slot of timeSlots) {
-      const slotConfig = config.slots.find(s => s.timeSlot === slot);
+      const slotConfig = config.slots.find((s) => s.timeSlot === slot);
       if (!slotConfig || slotConfig.prayerIds.length === 0) continue;
 
       const slotTime = TIME_SLOT_LABELS[slot].defaultTime;
       const slotHour = slotTime.hour;
       const slotMinute = slotTime.minute;
 
-      if (slotHour > currentHour || (slotHour === currentHour && slotMinute > currentMinute)) {
+      if (
+        slotHour > currentHour ||
+        (slotHour === currentHour && slotMinute > currentMinute)
+      ) {
         for (const prayerId of slotConfig.prayerIds) {
           if (!completion.completedPrayers[prayerId]) {
             const prayer = await getPrayerById(prayerId);
@@ -107,7 +123,7 @@ async function getNextPrayer(): Promise<{ prayer: PrayerWithLines; timeSlot: Tim
     }
 
     for (const slot of timeSlots) {
-      const slotConfig = config.slots.find(s => s.timeSlot === slot);
+      const slotConfig = config.slots.find((s) => s.timeSlot === slot);
       if (!slotConfig) continue;
 
       for (const prayerId of slotConfig.prayerIds) {
@@ -131,24 +147,20 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const router = useRouter();
+  const { user } = useAuth();
 
   const [username, setUsername] = useState<string>("");
   const [streakDays, setStreakDays] = useState<number>(0);
   const [xp, setXp] = useState<number>(0);
   const [routineProgress, setRoutineProgress] = useState<number>(0);
   const [routineStats, setRoutineStats] = useState({ completed: 0, total: 0 });
-  const [nextPrayer, setNextPrayer] = useState<{ prayer: PrayerWithLines; timeSlot: TimeSlot } | null>(null);
+  const [nextPrayer, setNextPrayer] = useState<{
+    prayer: PrayerWithLines;
+    timeSlot: TimeSlot;
+  } | null>(null);
+  const [nextLesson, setNextLesson] = useState<LessonWithBlocks | null>(null);
   const [loading, setLoading] = useState(true);
   const [fadeAnim] = useState(new Animated.Value(0));
-
-  // Placeholder lesson data
-  const upcomingLesson = {
-    id: "lesson-1",
-    title: "Introduction to Spiritual Practice",
-    subtitle: "Lesson 1 of 12",
-    progress: 0,
-    estimatedTime: "10 min"
-  };
 
   useEffect(() => {
     loadHomeData();
@@ -156,14 +168,14 @@ export default function HomeScreen() {
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 600,
-      useNativeDriver: true,
+      useNativeDriver: true
     }).start();
   }, []);
 
   const loadHomeData = async () => {
     try {
       setLoading(true);
-      
+
       const profile = await loadUserProfile();
       setUsername(profile.name || "Friend");
 
@@ -174,13 +186,23 @@ export default function HomeScreen() {
         const progress = stats.total > 0 ? stats.completed / stats.total : 0;
         setRoutineProgress(progress);
         setXp(stats.completed * 10);
-        
+
         const next = await getNextPrayer();
         setNextPrayer(next);
       }
 
       const streak = await calculateStreak();
       setStreakDays(streak);
+
+      const prefs = await loadPrayerPreferences();
+      const holyBookId = prefs?.selectedHolyBookIds?.[0];
+      if (holyBookId) {
+        const userId = await getLessonProgressUserId(user?.id ?? null);
+        const lesson = await getNextLessonForUser(userId, holyBookId);
+        setNextLesson(lesson);
+      } else {
+        setNextLesson(null);
+      }
     } catch (error) {
       console.error("Error loading home data:", error);
     } finally {
@@ -232,7 +254,7 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -241,15 +263,22 @@ export default function HomeScreen() {
         <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
           <View style={styles.greetingContainer}>
             <View style={styles.greetingIconContainer}>
-              <Ionicons 
-                name={new Date().getHours() < 12 ? "sunny" : new Date().getHours() < 17 ? "partly-sunny" : "moon"} 
-                size={32} 
-                color={theme.tint} 
+              <Ionicons
+                name={
+                  new Date().getHours() < 12
+                    ? "sunny"
+                    : new Date().getHours() < 17
+                    ? "partly-sunny"
+                    : "moon"
+                }
+                size={32}
+                color={theme.tint}
               />
             </View>
             <View style={styles.greetingTextContainer}>
               <ThemedText type="title" style={styles.greetingText}>
-                {getGreeting()}{username ? `, ${username}` : ""}
+                {getGreeting()}
+                {username ? `, ${username}` : ""}
               </ThemedText>
               <ThemedText style={[styles.subtitle, { color: theme.icon }]}>
                 Continue your spiritual journey today
@@ -264,68 +293,97 @@ export default function HomeScreen() {
             <ThemedText type="subtitle" style={styles.sectionTitle}>
               Your Progress
             </ThemedText>
-            <View style={[styles.sectionIcon, { backgroundColor: theme.tint + "15" }]}>
+            <View
+              style={[
+                styles.sectionIcon,
+                { backgroundColor: theme.tint + "15" }
+              ]}
+            >
               <Ionicons name="trending-up" size={18} color={theme.tint} />
             </View>
           </View>
           <View style={styles.statsGrid}>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.7}
               style={[
-                styles.statCard, 
-                { 
+                styles.statCard,
+                {
                   backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#fff",
                   borderLeftWidth: 4,
                   borderLeftColor: theme.tint
                 }
               ]}
             >
-              <View style={[styles.statIconContainer, { backgroundColor: theme.tint + "15" }]}>
+              <View
+                style={[
+                  styles.statIconContainer,
+                  { backgroundColor: theme.tint + "15" }
+                ]}
+              >
                 <Ionicons name="star" size={20} color={theme.tint} />
               </View>
-              <ThemedText type="title" style={[styles.statValue, { color: theme.tint }]}>
+              <ThemedText
+                type="title"
+                style={[styles.statValue, { color: theme.tint }]}
+              >
                 {xp}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: theme.icon }]}>
                 Total XP
               </ThemedText>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.7}
               style={[
-                styles.statCard, 
-                { 
+                styles.statCard,
+                {
                   backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#fff",
                   borderLeftWidth: 4,
                   borderLeftColor: "#FF6B6B"
                 }
               ]}
             >
-              <View style={[styles.statIconContainer, { backgroundColor: "#FF6B6B15" }]}>
+              <View
+                style={[
+                  styles.statIconContainer,
+                  { backgroundColor: "#FF6B6B15" }
+                ]}
+              >
                 <Ionicons name="flame" size={20} color="#FF6B6B" />
               </View>
-              <ThemedText type="title" style={[styles.statValue, { color: "#FF6B6B" }]}>
+              <ThemedText
+                type="title"
+                style={[styles.statValue, { color: "#FF6B6B" }]}
+              >
                 {streakDays}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: theme.icon }]}>
                 Day Streak
               </ThemedText>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.7}
               style={[
-                styles.statCard, 
-                { 
+                styles.statCard,
+                {
                   backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#fff",
                   borderLeftWidth: 4,
                   borderLeftColor: "#4ECDC4"
                 }
               ]}
             >
-              <View style={[styles.statIconContainer, { backgroundColor: "#4ECDC415" }]}>
+              <View
+                style={[
+                  styles.statIconContainer,
+                  { backgroundColor: "#4ECDC415" }
+                ]}
+              >
                 <Ionicons name="checkmark-circle" size={20} color="#4ECDC4" />
               </View>
-              <ThemedText type="title" style={[styles.statValue, { color: "#4ECDC4" }]}>
+              <ThemedText
+                type="title"
+                style={[styles.statValue, { color: "#4ECDC4" }]}
+              >
                 {routineStats.completed}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: theme.icon }]}>
@@ -338,8 +396,8 @@ export default function HomeScreen() {
         {/* Routine Progress Card */}
         {routineStats.total > 0 && (
           <Animated.View style={[styles.cardContainer, { opacity: fadeAnim }]}>
-            <TouchableOpacity 
-              activeOpacity={0.95} 
+            <TouchableOpacity
+              activeOpacity={0.95}
               onPress={() => router.push("/(tabs)/routine")}
             >
               <LinearGradient
@@ -353,84 +411,106 @@ export default function HomeScreen() {
                   <View style={styles.gradientCircle2} />
                 </View>
                 <View style={styles.cardContent}>
-              <View style={styles.cardTop}>
-                <View>
-                  <ThemedText type="subtitle" style={styles.cardSub}>
-                    Today's Routine
-                  </ThemedText>
-                  <ThemedText type="title" style={styles.streakNumber}>
-                    {routineStats.completed} / {routineStats.total}
-                  </ThemedText>
-                </View>
-                <ThemedText type="subtitle" style={styles.xpText}>
-                  Current Streak{"\n"}
-                  <ThemedText type="title">{streakDays} Days</ThemedText>
-                </ThemedText>
-              </View>
+                  <View style={styles.cardTop}>
+                    <View>
+                      <ThemedText type="subtitle" style={styles.cardSub}>
+                        Today's Routine
+                      </ThemedText>
+                      <ThemedText type="title" style={styles.streakNumber}>
+                        {routineStats.completed} / {routineStats.total}
+                      </ThemedText>
+                    </View>
+                    <ThemedText type="subtitle" style={styles.xpText}>
+                      Current Streak{"\n"}
+                      <ThemedText type="title">{streakDays} Days</ThemedText>
+                    </ThemedText>
+                  </View>
 
-              <View style={styles.cardMiddle}>
-                <View style={styles.progressWrap}>
-                  <Progress.Circle
-                    size={84}
-                    progress={routineProgress}
-                    showsText
-                    formatText={() => `${Math.round(routineProgress * 100)}%`}
-                    thickness={8}
-                    borderWidth={0}
-                    color={"#fff"}
-                    unfilledColor={"rgba(255,255,255,0.15)"}
-                  />
-                </View>
+                  <View style={styles.cardMiddle}>
+                    <View style={styles.progressWrap}>
+                      <Progress.Circle
+                        size={84}
+                        progress={routineProgress}
+                        showsText
+                        formatText={() =>
+                          `${Math.round(routineProgress * 100)}%`
+                        }
+                        thickness={8}
+                        borderWidth={0}
+                        color={"#fff"}
+                        unfilledColor={"rgba(255,255,255,0.15)"}
+                      />
+                    </View>
 
-                <View style={styles.goalText}>
-                  <ThemedText
-                    type="subtitle"
-                    style={{ color: "rgba(255,255,255,0.95)" }}
-                  >
-                    Daily Goal Progress
-                  </ThemedText>
-                  <ThemedText
-                    style={{ color: "rgba(255,255,255,0.9)", marginTop: 6, fontSize: 13 }}
-                  >
-                    {getMotivationalMessage(routineProgress * 100)}
-                  </ThemedText>
-                </View>
-              </View>
+                    <View style={styles.goalText}>
+                      <ThemedText
+                        type="subtitle"
+                        style={{ color: "rgba(255,255,255,0.95)" }}
+                      >
+                        Daily Goal Progress
+                      </ThemedText>
+                      <ThemedText
+                        style={{
+                          color: "rgba(255,255,255,0.9)",
+                          marginTop: 6,
+                          fontSize: 13
+                        }}
+                      >
+                        {getMotivationalMessage(routineProgress * 100)}
+                      </ThemedText>
+                    </View>
+                  </View>
 
-              {nextPrayer && (
-                <View style={styles.cardBottom}>
-                  <ThemedText
-                    type="subtitle"
-                    style={{ color: "rgba(255,255,255,0.95)" }}
-                  >
-                    Next Prayer
-                  </ThemedText>
-                  <ThemedText
-                    style={{ color: "rgba(255,255,255,0.9)", marginTop: 6, fontSize: 13 }}
-                  >
-                    {nextPrayer.prayer.name} ({TIME_SLOT_LABELS[nextPrayer.timeSlot].name})
-                  </ThemedText>
-                </View>
-              )}
+                  {nextPrayer && (
+                    <View style={styles.cardBottom}>
+                      <ThemedText
+                        type="subtitle"
+                        style={{ color: "rgba(255,255,255,0.95)" }}
+                      >
+                        Next Prayer
+                      </ThemedText>
+                      <ThemedText
+                        style={{
+                          color: "rgba(255,255,255,0.9)",
+                          marginTop: 6,
+                          fontSize: 13
+                        }}
+                      >
+                        {nextPrayer.prayer.name} (
+                        {TIME_SLOT_LABELS[nextPrayer.timeSlot].name})
+                      </ThemedText>
+                    </View>
+                  )}
                 </View>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
         )}
 
-        {/* Upcoming Lesson Card */}
-        <Animated.View style={[styles.lessonCardContainer, { opacity: fadeAnim }]}>
+        {/* Next Lesson Card */}
+        <Animated.View
+          style={[styles.lessonCardContainer, { opacity: fadeAnim }]}
+        >
           <TouchableOpacity
             activeOpacity={0.9}
             style={[
-              styles.lessonCard, 
-              { 
+              styles.lessonCard,
+              {
                 backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#fff",
                 borderWidth: 1,
                 borderColor: colorScheme === "dark" ? "#3a3a3a" : "#e5e5e5"
               }
             ]}
-            onPress={() => router.push("/(tabs)/journey")}
+            onPress={() => {
+              if (nextLesson) {
+                router.push({
+                  pathname: "/(tabs)/journey",
+                  params: { openLessonId: nextLesson.id }
+                });
+              } else {
+                router.push("/(tabs)/journey");
+              }
+            }}
           >
             <View style={styles.lessonHeader}>
               <LinearGradient
@@ -441,39 +521,45 @@ export default function HomeScreen() {
               </LinearGradient>
               <View style={styles.lessonContent}>
                 <ThemedText type="subtitle" style={styles.lessonTitle}>
-                  {upcomingLesson.title}
+                  {nextLesson
+                    ? nextLesson.title ||
+                      nextLesson.learning_objective ||
+                      (nextLesson.tags?.length
+                        ? nextLesson.tags.slice(0, 2).join(", ")
+                        : `Lesson ${nextLesson.order_index}`)
+                    : "Your next lesson"}
                 </ThemedText>
-                <ThemedText style={[styles.lessonSubtitle, { color: theme.icon }]}>
-                  {upcomingLesson.subtitle} · {upcomingLesson.estimatedTime}
+                <ThemedText
+                  style={[styles.lessonSubtitle, { color: theme.icon }]}
+                >
+                  {nextLesson
+                    ? `Lesson ${nextLesson.order_index} · ${
+                        nextLesson.estimated_time_min ?? 10
+                      } min`
+                    : "Select a holy book in Settings to see your next lesson"}
                 </ThemedText>
               </View>
-              <View style={[styles.chevronContainer, { backgroundColor: theme.tint + "10" }]}>
+              <View
+                style={[
+                  styles.chevronContainer,
+                  { backgroundColor: theme.tint + "10" }
+                ]}
+              >
                 <Ionicons name="chevron-forward" size={18} color={theme.tint} />
               </View>
             </View>
-            {upcomingLesson.progress > 0 && (
-              <View style={styles.lessonProgress}>
-                <Progress.Bar
-                  progress={upcomingLesson.progress}
-                  width={null}
-                  height={6}
-                  color={theme.tint}
-                  unfilledColor={theme.icon + "20"}
-                  borderWidth={0}
-                  borderRadius={3}
-                />
-              </View>
-            )}
           </TouchableOpacity>
         </Animated.View>
 
         {/* Ask Spiritual Guide - Search Bar */}
-        <Animated.View style={[styles.guideCardContainer, { opacity: fadeAnim }]}>
+        <Animated.View
+          style={[styles.guideCardContainer, { opacity: fadeAnim }]}
+        >
           <TouchableOpacity
             activeOpacity={0.9}
             style={[
-              styles.guideCard, 
-              { 
+              styles.guideCard,
+              {
                 backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#fff",
                 borderWidth: 1,
                 borderColor: colorScheme === "dark" ? "#3a3a3a" : "#e5e5e5"
@@ -496,12 +582,23 @@ export default function HomeScreen() {
                   <ThemedText type="subtitle" style={styles.guideTitle}>
                     Ask Your Spiritual Guide
                   </ThemedText>
-                  <ThemedText style={[styles.guideSubtitle, { color: theme.icon }]}>
+                  <ThemedText
+                    style={[styles.guideSubtitle, { color: theme.icon }]}
+                  >
                     Get guidance on life questions and spirituality
                   </ThemedText>
                 </View>
-                <View style={[styles.chevronContainer, { backgroundColor: theme.tint + "10" }]}>
-                  <Ionicons name="chevron-forward" size={18} color={theme.tint} />
+                <View
+                  style={[
+                    styles.chevronContainer,
+                    { backgroundColor: theme.tint + "10" }
+                  ]}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={theme.tint}
+                  />
                 </View>
               </View>
             </LinearGradient>
@@ -514,7 +611,12 @@ export default function HomeScreen() {
             <ThemedText type="subtitle" style={styles.sectionTitle}>
               Quick Access
             </ThemedText>
-            <View style={[styles.sectionIcon, { backgroundColor: theme.tint + "15" }]}>
+            <View
+              style={[
+                styles.sectionIcon,
+                { backgroundColor: theme.tint + "15" }
+              ]}
+            >
               <Ionicons name="apps" size={18} color={theme.tint} />
             </View>
           </View>
@@ -524,8 +626,9 @@ export default function HomeScreen() {
                 key={c.id}
                 style={[
                   styles.quickCard,
-                  { 
-                    backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#fff",
+                  {
+                    backgroundColor:
+                      colorScheme === "dark" ? "#2a2a2a" : "#fff",
                     borderWidth: 1,
                     borderColor: colorScheme === "dark" ? "#3a3a3a" : "#e5e5e5"
                   }
@@ -533,18 +636,39 @@ export default function HomeScreen() {
                 activeOpacity={0.85}
                 onPress={() => router.push(c.route as any)}
               >
-                <View style={[styles.iconCircle, { backgroundColor: theme.tint + "15" }]}>
-                  <IconSymbol name={c.icon as any} size={18} color={theme.tint} />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    { backgroundColor: theme.tint + "15" }
+                  ]}
+                >
+                  <IconSymbol
+                    name={c.icon as any}
+                    size={18}
+                    color={theme.tint}
+                  />
                 </View>
                 <View style={styles.quickTextContainer}>
-                  <ThemedText type="subtitle" style={styles.quickTitle} numberOfLines={1}>
+                  <ThemedText
+                    type="subtitle"
+                    style={styles.quickTitle}
+                    numberOfLines={1}
+                  >
                     {c.title}
                   </ThemedText>
-                  <ThemedText style={[styles.quickSubtitle, { color: theme.icon }]} numberOfLines={1}>
+                  <ThemedText
+                    style={[styles.quickSubtitle, { color: theme.icon }]}
+                    numberOfLines={1}
+                  >
                     {c.subtitle}
                   </ThemedText>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={theme.icon} style={{ opacity: 0.5, marginLeft: 4 }} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={theme.icon}
+                  style={{ opacity: 0.5, marginLeft: 4 }}
+                />
               </TouchableOpacity>
             ))}
           </View>
@@ -712,36 +836,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16
   },
-  cardSub: { 
+  cardSub: {
     color: "rgba(255,255,255,0.9)",
     fontSize: 14
   },
-  streakNumber: { 
-    marginTop: 4, 
-    color: "#fff", 
+  streakNumber: {
+    marginTop: 4,
+    color: "#fff",
     fontWeight: "800",
     fontSize: 24
   },
-  xpText: { 
-    textAlign: "right", 
+  xpText: {
+    textAlign: "right",
     color: "rgba(255,255,255,0.95)",
     fontSize: 14
   },
-  cardMiddle: { 
-    flexDirection: "row", 
-    alignItems: "center", 
+  cardMiddle: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 8
   },
-  progressWrap: { 
-    width: 100, 
-    alignItems: "center", 
-    justifyContent: "center" 
+  progressWrap: {
+    width: 100,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  goalText: { 
-    marginLeft: 16, 
-    flex: 1 
+  goalText: {
+    marginLeft: 16,
+    flex: 1
   },
-  cardBottom: { 
+  cardBottom: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
@@ -864,13 +988,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   },
-  quickTitle: { 
-    fontWeight: "700", 
+  quickTitle: {
+    fontWeight: "700",
     fontSize: 15,
     marginBottom: 2,
     letterSpacing: -0.2
   },
-  quickSubtitle: { 
+  quickSubtitle: {
     fontSize: 11,
     lineHeight: 14
   }

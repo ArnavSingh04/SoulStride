@@ -1,4 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useImperativeHandle,
+  useRef,
+  forwardRef
+} from "react";
 import {
   View,
   StyleSheet,
@@ -6,7 +13,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  RefreshControl,
+  RefreshControl
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
@@ -14,7 +21,12 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getLessonsPaginated } from "@/lib/database.service";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  getLessonsPaginated,
+  getCompletedLessonsForHolyBook
+} from "@/lib/database.service";
+import { getLessonProgressUserId } from "@/services/lesson-progress-user";
 import type { LessonWithBlocks } from "@/lib/database.types";
 
 const { width, height } = Dimensions.get("window");
@@ -24,10 +36,21 @@ const PATH_WIDTH = 4;
 const LABEL_HEIGHT = 44; // Approximate height for lesson label (2 lines of text + spacing)
 const CURVE_CONTROL_OFFSET = 50; // Control point offset for smooth curves
 const LESSONS_PER_BATCH = 10; // Load 10 lessons at a time
+const LESSONS_PER_SECTION = 5; // Groups of 5; complete all in a section to unlock the next
+const SECTION_HEADER_HEIGHT = 36;
 
 interface LearningJourneyProps {
   holyBookId?: string;
   onLessonPress?: (lesson: LessonWithBlocks) => void;
+}
+
+export interface LearningJourneyRef {
+  refreshProgress: () => Promise<void>;
+}
+
+interface CompletedLesson {
+  lesson_id: string;
+  order_index: number;
 }
 
 interface LessonNode {
@@ -36,18 +59,41 @@ interface LessonNode {
   y: number;
   completed: boolean;
   locked: boolean;
+  sectionIndex: number;
   isCheckpoint?: boolean;
   isSpecial?: boolean; // For treasure chests, special lessons
 }
 
+function isSectionUnlocked(
+  sectionIndex: number,
+  completedOrderIndices: Set<number>
+): boolean {
+  if (sectionIndex === 0) return true;
+  for (let t = 0; t < sectionIndex; t++) {
+    for (
+      let k = t * LESSONS_PER_SECTION + 1;
+      k <= (t + 1) * LESSONS_PER_SECTION;
+      k++
+    ) {
+      if (!completedOrderIndices.has(k)) return false;
+    }
+  }
+  return true;
+}
 
-export default function LearningJourney({
-  holyBookId,
-  onLessonPress,
-}: LearningJourneyProps) {
+function LearningJourneyInner(
+  { holyBookId, onLessonPress }: LearningJourneyProps,
+  ref: React.Ref<LearningJourneyRef>
+) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
-  const [displayedLessons, setDisplayedLessons] = useState<LessonWithBlocks[]>([]);
+  const { user } = useAuth();
+  const [displayedLessons, setDisplayedLessons] = useState<LessonWithBlocks[]>(
+    []
+  );
+  const [completedLessons, setCompletedLessons] = useState<CompletedLesson[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -55,9 +101,57 @@ export default function LearningJourney({
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
+  const loadLessons = useCallback(async () => {
+    if (!holyBookId) {
+      setDisplayedLessons([]);
+      setNodes([]);
+      setCompletedLessons([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const userId = await getLessonProgressUserId(user?.id ?? null);
+      const [{ lessons, hasMore: more }, completed] = await Promise.all([
+        getLessonsPaginated(holyBookId, LESSONS_PER_BATCH, 0),
+        getCompletedLessonsForHolyBook(userId, holyBookId)
+      ]);
+
+      if (!lessons || lessons.length === 0) {
+        setError(
+          "No lessons found. Run: npm run migrate:lessons-from-json:clear (after clearing, or npm run migrate:lessons-from-json to add from lessons.json)"
+        );
+        setDisplayedLessons([]);
+        setNodes([]);
+        setCompletedLessons([]);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
+      setDisplayedLessons(lessons);
+      setCompletedLessons(completed);
+      setHasMore(more);
+      generateNodes(lessons, completed);
+    } catch (err) {
+      console.error("Error loading lessons:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown error occurred";
+      setError(
+        `Failed to load lessons: ${errorMessage}. Please check your database connection and ensure tables exist.`
+      );
+      setDisplayedLessons([]);
+      setNodes([]);
+      setCompletedLessons([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [holyBookId, user?.id]);
+
   useEffect(() => {
     loadLessons();
-  }, [holyBookId]);
+  }, [loadLessons]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -68,42 +162,16 @@ export default function LearningJourney({
     setRefreshing(false);
   };
 
-  const loadLessons = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  /** Refetch completed progress and regenerate nodes (e.g. after user completes a lesson). */
+  const refreshProgress = useCallback(async () => {
+    if (!holyBookId || displayedLessons.length === 0) return;
+    const userId = await getLessonProgressUserId(user?.id ?? null);
+    const completed = await getCompletedLessonsForHolyBook(userId, holyBookId);
+    setCompletedLessons(completed);
+    generateNodes(displayedLessons, completed);
+  }, [holyBookId, user?.id, displayedLessons]);
 
-      if (!holyBookId) {
-        setDisplayedLessons([]);
-        setNodes([]);
-        setLoading(false);
-        return;
-      }
-
-      const { lessons, hasMore: more } = await getLessonsPaginated(holyBookId, LESSONS_PER_BATCH, 0);
-
-      if (!lessons || lessons.length === 0) {
-        setError('No lessons found. Run: npm run migrate:lessons-from-json:clear (after clearing, or npm run migrate:lessons-from-json to add from lessons.json)');
-        setDisplayedLessons([]);
-        setNodes([]);
-        setHasMore(false);
-        setLoading(false);
-        return;
-      }
-
-      setDisplayedLessons(lessons);
-      setHasMore(more);
-      generateNodes(lessons);
-    } catch (err) {
-      console.error("Error loading lessons:", err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(`Failed to load lessons: ${errorMessage}. Please check your database connection and ensure tables exist.`);
-      setDisplayedLessons([]);
-      setNodes([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useImperativeHandle(ref, () => ({ refreshProgress }), [refreshProgress]);
 
   const loadMoreLessons = async () => {
     if (loadingMore || !hasMore || !holyBookId) return;
@@ -111,12 +179,16 @@ export default function LearningJourney({
     setLoadingMore(true);
     try {
       const offset = displayedLessons.length;
-      const { lessons, hasMore: more } = await getLessonsPaginated(holyBookId, LESSONS_PER_BATCH, offset);
+      const { lessons, hasMore: more } = await getLessonsPaginated(
+        holyBookId,
+        LESSONS_PER_BATCH,
+        offset
+      );
 
       if (lessons.length > 0) {
-        setDisplayedLessons(prev => {
+        setDisplayedLessons((prev) => {
           const updated = [...prev, ...lessons];
-          generateNodes(updated);
+          generateNodes(updated, completedLessons);
           return updated;
         });
       }
@@ -128,28 +200,48 @@ export default function LearningJourney({
     }
   };
 
-  const generateNodes = (lessonsToDisplay: LessonWithBlocks[]) => {
+  const generateNodes = (
+    lessonsToDisplay: LessonWithBlocks[],
+    completed: CompletedLesson[]
+  ) => {
+    const completedLessonIds = new Set(completed.map((c) => c.lesson_id));
+    const completedOrderIndices = new Set(completed.map((c) => c.order_index));
     const allNodes: LessonNode[] = [];
-    
+    let currentY = 20;
+
     lessonsToDisplay.forEach((lesson) => {
-      // Use order_index for global positioning (not local index in displayed array)
-      const globalIndex = lesson.order_index - 1; // order_index is 1-based
-      
-      // Create winding path: alternate left/right
-      const offsetX = (globalIndex % 3 === 1) ? -40 : (globalIndex % 3 === 2) ? 40 : 0;
+      const globalIndex = lesson.order_index - 1;
+      const sectionIndex = Math.floor(globalIndex / LESSONS_PER_SECTION);
+      const isFirstInSection = globalIndex % LESSONS_PER_SECTION === 0;
+      if (isFirstInSection) {
+        currentY += SECTION_HEADER_HEIGHT;
+      }
+
+      const offsetX =
+        globalIndex % 3 === 1 ? -40 : globalIndex % 3 === 2 ? 40 : 0;
       const x = width / 2 - NODE_SIZE / 2 + offsetX;
-      // Position nodes starting from top, using global index
-      const y = 20 + globalIndex * (NODE_SIZE + NODE_SPACING + LABEL_HEIGHT);
+      const y = currentY;
+
+      const completed_ = completedLessonIds.has(lesson.id);
+      const unlocked = isSectionUnlocked(sectionIndex, completedOrderIndices);
+      const locked = !unlocked;
 
       allNodes.push({
         lesson,
         x,
         y,
-        completed: false, // TODO: Get from user progress
-        locked: false, // All lessons unlocked for now
-        isCheckpoint: (globalIndex + 1) % 5 === 0,
-        isSpecial: lesson.lesson_type === "checkpoint" || lesson.id.includes("checkpoint"),
+        completed: completed_,
+        locked,
+        sectionIndex,
+        isCheckpoint:
+          (globalIndex + 1) % LESSONS_PER_SECTION === 0 &&
+          globalIndex + 1 >= LESSONS_PER_SECTION,
+        isSpecial:
+          lesson.lesson_type === "checkpoint" ||
+          lesson.id.includes("checkpoint")
       });
+
+      currentY += NODE_SIZE + NODE_SPACING + LABEL_HEIGHT;
     });
 
     setNodes(allNodes);
@@ -160,7 +252,8 @@ export default function LearningJourney({
     const paddingToBottom = 200;
 
     if (
-      layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom &&
+      layoutMeasurement.height + contentOffset.y >=
+        contentSize.height - paddingToBottom &&
       hasMore &&
       !loadingMore &&
       holyBookId
@@ -169,7 +262,13 @@ export default function LearningJourney({
     }
   };
 
-  const getNodeIcon = (lesson: LessonWithBlocks, completed: boolean, locked: boolean, isCheckpoint?: boolean, isSpecial?: boolean) => {
+  const getNodeIcon = (
+    lesson: LessonWithBlocks,
+    completed: boolean,
+    locked: boolean,
+    isCheckpoint?: boolean,
+    isSpecial?: boolean
+  ) => {
     if (completed) {
       return "checkmark-circle";
     }
@@ -179,25 +278,45 @@ export default function LearningJourney({
 
     // Determine icon based on lesson type and blocks
     const blockTypes = (lesson.blocks || []).map((b: any) => b.block_type);
-    if (blockTypes.includes("audio_recitation") || blockTypes.includes("repeat_practice")) {
+    if (
+      blockTypes.includes("audio_recitation") ||
+      blockTypes.includes("repeat_practice")
+    ) {
       return "mic";
     }
-    if (blockTypes.includes("question") || blockTypes.includes("micro_quiz") || blockTypes.includes("match") || blockTypes.includes("cloze")) {
+    if (
+      blockTypes.includes("question") ||
+      blockTypes.includes("micro_quiz") ||
+      blockTypes.includes("match") ||
+      blockTypes.includes("cloze")
+    ) {
       return "fitness"; // Dumbbell for practice
     }
     if (blockTypes.includes("scenario_choice")) {
       return "git-branch";
     }
-    if (blockTypes.includes("reflection") || blockTypes.includes("guided_reflection")) {
+    if (
+      blockTypes.includes("reflection") ||
+      blockTypes.includes("guided_reflection")
+    ) {
       return "journal";
     }
-    if (blockTypes.includes("audio_recitation") || blockTypes.includes("listen_and_select")) {
+    if (
+      blockTypes.includes("audio_recitation") ||
+      blockTypes.includes("listen_and_select")
+    ) {
       return "headset";
     }
     return "book";
   };
 
-  const getNodeColor = (completed: boolean, locked: boolean, isCheckpoint?: boolean, isSpecial?: boolean, theme?: any) => {
+  const getNodeColor = (
+    completed: boolean,
+    locked: boolean,
+    isCheckpoint?: boolean,
+    isSpecial?: boolean,
+    theme?: any
+  ) => {
     if (locked) return "#CCCCCC";
     if (completed) return theme?.tint || "#7C3AED";
     if (isCheckpoint || isSpecial) return "#FFD700"; // Gold for special lessons
@@ -228,14 +347,27 @@ export default function LearningJourney({
           <ThemedText style={[styles.emptyText, { color: theme.icon }]}>
             {error}
           </ThemedText>
-          <ThemedText style={[styles.emptyText, { color: theme.icon, marginTop: 16, fontSize: 14 }]}>
+          <ThemedText
+            style={[
+              styles.emptyText,
+              { color: theme.icon, marginTop: 16, fontSize: 14 }
+            ]}
+          >
             Make sure you've:
           </ThemedText>
-          <ThemedText style={[styles.emptyText, { color: theme.icon, fontSize: 14, marginTop: 8 }]}>
+          <ThemedText
+            style={[
+              styles.emptyText,
+              { color: theme.icon, fontSize: 14, marginTop: 8 }
+            ]}
+          >
             1. Created the database tables (run the SQL schema)
           </ThemedText>
-          <ThemedText style={[styles.emptyText, { color: theme.icon, fontSize: 14 }]}>
-            2. Run: npm run migrate:lessons-from-json:clear (or migrate:lessons-from-json)
+          <ThemedText
+            style={[styles.emptyText, { color: theme.icon, fontSize: 14 }]}
+          >
+            2. Run: npm run migrate:lessons-from-json:clear (or
+            migrate:lessons-from-json)
           </ThemedText>
         </View>
       </ThemedView>
@@ -270,8 +402,14 @@ export default function LearningJourney({
           <ThemedText style={[styles.emptyText, { color: theme.icon }]}>
             Your learning journey will appear here once lessons are created.
           </ThemedText>
-          <ThemedText style={[styles.emptyText, { color: theme.icon, marginTop: 16, fontSize: 14 }]}>
-            Run: npm run migrate:lessons-from-json:clear (or migrate:lessons-from-json)
+          <ThemedText
+            style={[
+              styles.emptyText,
+              { color: theme.icon, marginTop: 16, fontSize: 14 }
+            ]}
+          >
+            Run: npm run migrate:lessons-from-json:clear (or
+            migrate:lessons-from-json)
           </ThemedText>
         </View>
       </ThemedView>
@@ -279,15 +417,19 @@ export default function LearningJourney({
   }
 
   // Content height from currently loaded nodes (grows as user scrolls and we load more)
-  const currentContentHeight = nodes.length > 0
-    ? nodes[nodes.length - 1].y + NODE_SIZE + LABEL_HEIGHT + 100
-    : height;
+  const currentContentHeight =
+    nodes.length > 0
+      ? nodes[nodes.length - 1].y + NODE_SIZE + LABEL_HEIGHT + 100
+      : height;
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { minHeight: currentContentHeight }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { minHeight: currentContentHeight }
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={400}
@@ -301,7 +443,9 @@ export default function LearningJourney({
         }
       >
         {/* Learning Path - Continuous flow */}
-        <View style={[styles.pathContainer, { minHeight: currentContentHeight }]}>
+        <View
+          style={[styles.pathContainer, { minHeight: currentContentHeight }]}
+        >
           {/* Single SVG for all connection paths */}
           <Svg
             style={styles.pathSvg}
@@ -311,31 +455,34 @@ export default function LearningJourney({
             {nodes.map((node, nodeIndex) => {
               const isLast = nodeIndex === nodes.length - 1;
               const nextNode = nodes[nodeIndex + 1];
-              
+
               if (isLast || !nextNode) return null;
-              
+
               // Calculate start and end points (center of nodes)
               const startX = node.x + NODE_SIZE / 2;
               const startY = node.y + NODE_SIZE + LABEL_HEIGHT;
               const endX = nextNode.x + NODE_SIZE / 2;
               const endY = nextNode.y;
-              
+
               // Calculate distance and direction
               const deltaX = endX - startX;
               const deltaY = endY - startY;
               const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-              
+
               // Create smooth bezier curve with control points
               // Control points positioned to create a natural flowing curve
-              const curveStrength = Math.min(distance * 0.4, CURVE_CONTROL_OFFSET);
-              const controlX1 = startX + (deltaX * 0.3);
+              const curveStrength = Math.min(
+                distance * 0.4,
+                CURVE_CONTROL_OFFSET
+              );
+              const controlX1 = startX + deltaX * 0.3;
               const controlY1 = startY + curveStrength;
-              const controlX2 = endX - (deltaX * 0.3);
+              const controlX2 = endX - deltaX * 0.3;
               const controlY2 = endY - curveStrength;
-              
+
               // Smooth cubic bezier curve
               const pathData = `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`;
-              
+
               return (
                 <Path
                   key={`path-${node.lesson.id}`}
@@ -350,9 +497,12 @@ export default function LearningJourney({
               );
             })}
           </Svg>
-          
+
           {/* Lesson Nodes */}
           {nodes.map((node, nodeIndex) => {
+            const isFirstInSection =
+              nodeIndex === 0 ||
+              nodes[nodeIndex - 1].sectionIndex !== node.sectionIndex;
             const iconName = getNodeIcon(
               node.lesson,
               node.completed,
@@ -369,18 +519,44 @@ export default function LearningJourney({
             );
 
             return (
-              <View 
-                key={`node-${node.lesson.id}-${nodeIndex}`} 
+              <View
+                key={`node-${node.lesson.id}-${nodeIndex}`}
                 style={styles.nodeContainer}
               >
+                {/* Section header (above first node of each section) */}
+                {isFirstInSection && (
+                  <View
+                    style={[
+                      styles.sectionHeader,
+                      {
+                        left: 0,
+                        top: node.y - SECTION_HEADER_HEIGHT - 4,
+                        right: 0
+                      }
+                    ]}
+                  >
+                    <ThemedText
+                      style={[styles.sectionHeaderText, { color: theme.icon }]}
+                    >
+                      Section {node.sectionIndex + 1}
+                    </ThemedText>
+                  </View>
+                )}
 
                 {/* Lesson Node */}
-                <View style={[styles.lessonNodeWrapper, { left: node.x, top: node.y }]}>
+                <View
+                  style={[
+                    styles.lessonNodeWrapper,
+                    { left: node.x, top: node.y }
+                  ]}
+                >
                   <TouchableOpacity
                     style={[
                       styles.lessonNode,
                       {
-                        backgroundColor: node.completed
+                        backgroundColor: node.locked
+                          ? "#CCCCCC"
+                          : node.completed
                           ? theme.tint
                           : node.isCheckpoint || node.isSpecial
                           ? "#FFD700"
@@ -389,16 +565,17 @@ export default function LearningJourney({
                         borderWidth: 0,
                         shadowColor: "#000",
                         shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.1,
+                        shadowOpacity: node.locked ? 0.05 : 0.1,
                         shadowRadius: 4,
                         elevation: 3,
-                      },
+                        opacity: node.locked ? 0.8 : 1
+                      }
                     ]}
                     onPress={() => {
-                      if (onLessonPress) {
-                        onLessonPress(node.lesson);
-                      }
+                      if (node.locked) return;
+                      if (onLessonPress) onLessonPress(node.lesson);
                     }}
+                    disabled={node.locked}
                   >
                     <Ionicons
                       name={iconName as any}
@@ -421,29 +598,45 @@ export default function LearningJourney({
                     </View>
                   )}
                   {/* Lesson Label */}
-                  <View style={styles.lessonLabelContainer}>
-                    <ThemedText 
+                  <View
+                    style={[
+                      styles.lessonLabelContainer,
+                      node.locked && styles.lessonLabelLocked
+                    ]}
+                  >
+                    <ThemedText
                       style={[
                         styles.lessonLabel,
-                        { color: theme.text },
+                        { color: node.locked ? theme.icon : theme.text }
                       ]}
                       numberOfLines={2}
                       ellipsizeMode="tail"
                       adjustsFontSizeToFit={false}
                     >
-                      {node.lesson.title || node.lesson.learning_objective || (node.lesson.tags?.length ? node.lesson.tags.slice(0, 2).join(', ') : `Lesson ${node.lesson.order_index}`)}
+                      {node.lesson.title ||
+                        node.lesson.learning_objective ||
+                        (node.lesson.tags?.length
+                          ? node.lesson.tags.slice(0, 2).join(", ")
+                          : `Lesson ${node.lesson.order_index}`)}
                     </ThemedText>
                   </View>
                 </View>
               </View>
             );
           })}
-          
+
           {/* Loading more indicator */}
           {loadingMore && (
-            <View style={[styles.loadingMoreContainer, { top: currentContentHeight }]}>
+            <View
+              style={[
+                styles.loadingMoreContainer,
+                { top: currentContentHeight }
+              ]}
+            >
               <ActivityIndicator size="small" color={theme.tint} />
-              <ThemedText style={[styles.loadingMoreText, { color: theme.icon }]}>
+              <ThemedText
+                style={[styles.loadingMoreText, { color: theme.icon }]}
+              >
                 Loading more lessons...
               </ThemedText>
             </View>
@@ -454,91 +647,99 @@ export default function LearningJourney({
   );
 }
 
+const LearningJourney = forwardRef<LearningJourneyRef, LearningJourneyProps>(
+  LearningJourneyInner
+);
+export default LearningJourney;
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: 1
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 40,
+    padding: 40
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
+    fontSize: 16
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 40,
+    padding: 40
   },
   emptyTitle: {
     fontSize: 24,
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 8
   },
   emptyText: {
     fontSize: 16,
     textAlign: "center",
-    lineHeight: 24,
+    lineHeight: 24
   },
   scrollView: {
-    flex: 1,
+    flex: 1
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 100
   },
   pathContainer: {
     position: "relative",
+    width: "100%",
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 40
   },
   pathSvg: {
     position: "absolute",
     top: 0,
     left: 0,
-    zIndex: 0,
+    zIndex: 0
   },
   nodeContainer: {
     position: "absolute",
-    zIndex: 1,
+    left: 0,
+    right: 0,
+    zIndex: 1
   },
   lessonNodeWrapper: {
     position: "absolute",
     alignItems: "center",
-    zIndex: 1,
+    zIndex: 1
   },
   lessonNode: {
     width: NODE_SIZE,
     height: NODE_SIZE,
     borderRadius: NODE_SIZE / 2,
     justifyContent: "center",
-    alignItems: "center",
+    alignItems: "center"
   },
   lessonLabelContainer: {
     marginTop: 4,
     width: 120,
-    alignItems: "center",
+    alignItems: "center"
   },
   lessonLabel: {
     fontSize: 11,
     fontWeight: "600",
     textAlign: "center",
-    lineHeight: 14,
+    lineHeight: 14
   },
   lessonLabelLocked: {
-    opacity: 0.5,
+    opacity: 0.5
   },
   starsContainer: {
     flexDirection: "row",
     gap: 2,
     marginTop: 4,
-    alignSelf: "center",
+    alignSelf: "center"
   },
   star: {
-    marginHorizontal: 1,
+    marginHorizontal: 1
   },
   loadingMoreContainer: {
     position: "absolute",
@@ -547,10 +748,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: 8
   },
   loadingMoreText: {
     fontSize: 14,
-    marginLeft: 8,
+    marginLeft: 8
   },
+  sectionHeader: {
+    position: "absolute",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 0.5
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5
+  }
 });

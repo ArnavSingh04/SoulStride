@@ -70,24 +70,24 @@ export default function TabLayout() {
         }}
       />
 
-      {/* SETTINGS */}
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="gearshape.fill" color={color} />
-          )
-        }}
-      />
-
-      {/* PROFILE */}
+      {/* GUIDE - left of Settings */}
       <Tabs.Screen
         name="guide"
         options={{
           title: "Guide",
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="person.fill" color={color} />
+          )
+        }}
+      />
+
+      {/* SETTINGS - rightmost */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="gearshape.fill" color={color} />
           )
         }}
       />
