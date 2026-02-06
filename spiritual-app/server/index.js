@@ -25,7 +25,11 @@ const GOOGLE_CLOUD_PROJECT =
   process.env.GOOGLE_CLOUD_PROJECT || "project-45e7f38c-dbb5-44ae-beb";
 const GOOGLE_CLOUD_LOCATION =
   process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// gemini-1.5-flash returns 404 on Vertex; use 2.0
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.0-flash").replace(
+  /^gemini-1\.5-flash$/i,
+  "gemini-2.0-flash"
+);
 
 // Paths: server is spiritual-app/server/, script and venv are in spiritual-app/
 const APP_ROOT = path.resolve(__dirname, "..");
@@ -50,11 +54,13 @@ const VERTEX_TIMEOUT_MS = 55_000;
 function callGuidePython(question) {
   return new Promise((resolve, reject) => {
     // Pass env explicitly so Python always gets GCP vars (server/.env may not load if cwd ≠ server/)
+    // Override GEMINI_MODEL_WRITER too — guide_vertex.py checks it first and it may be set to gemini-1.5-flash elsewhere (404).
     const childEnv = {
       ...process.env,
       GOOGLE_CLOUD_PROJECT,
       GOOGLE_CLOUD_LOCATION,
-      GEMINI_MODEL
+      GEMINI_MODEL,
+      GEMINI_MODEL_WRITER: GEMINI_MODEL
     };
     const child = spawn(VENV_PYTHON, [GUIDE_SCRIPT], {
       stdio: ["pipe", "pipe", "pipe"],

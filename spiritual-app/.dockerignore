@@ -1,0 +1,42 @@
+# Dependencies and local env (set in Cloud Run)
+node_modules
+server/node_modules
+venv
+.env
+.env.*
+server/.env
+
+# App code (not needed for API image)
+app
+assets
+components
+contexts
+data
+hooks
+lib
+scripts
+services
+types
+.expo
+dist
+web-build
+
+# Git and IDE
+.git
+.vscode
+*.md
+!GUIDE_VERTEX_AI.md
+
+# Other files not needed in the container
+*.ts
+*.tsx
+*.sql
+lessonCreation.py
+sggs.json
+prayers.json
+lessons.json
+example-lesson.json
+eas.json
+app.json
+eslint.config.js
+tsconfig.json

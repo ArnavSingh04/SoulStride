@@ -19,7 +19,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 
 // Android emulator: localhost is the device; use 10.0.2.2 to reach host machine.
 const DEFAULT_GUIDE_API_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
+  Platform.OS === "android" ? "http://118.139.49.93" : "http://localhost:3001";
 
 // IMPORTANT: this is your Guide backend URL (not a Google URL).
 // If you don't have a .env, this will be undefined and we fall back to DEFAULT_GUIDE_API_URL.

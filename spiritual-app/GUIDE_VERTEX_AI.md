@@ -68,7 +68,9 @@ Restart the Expo dev server after changing env vars.
 
 ## 4. Deploying the API (optional)
 
-Deploy the `server/` app to any Node host (e.g. **Google Cloud Run**, Railway, Render):
+To get a **public URL** so the app works when you send an APK to others, deploy the API. Step-by-step for **Google Cloud Run**: see **[DEPLOY_CLOUD_RUN.md](./DEPLOY_CLOUD_RUN.md)** (Dockerfile + `gcloud run deploy` from `spiritual-app/`).
+
+You can also deploy the `server/` app to any Node host (e.g. Railway, Render):
 
 - Set `GOOGLE_APPLICATION_CREDENTIALS` to the service account key path, or run on GCP (e.g. Cloud Run) so ADC picks up the default service account.
 - Set `PORT` as required by the host (e.g. Cloud Run uses `8080`).
