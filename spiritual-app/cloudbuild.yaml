@@ -1,0 +1,29 @@
+# Build the Guide API image with full Docker output (for debugging deploy failures).
+# Run from spiritual-app: gcloud builds submit --config=cloudbuild.yaml .
+# If build succeeds, deploy with: gcloud run deploy soulstride-guide-api --image=us-central1-docker.pkg.dev/PROJECT_ID/cloud-run-source-deploy/soulstride-guide-api:latest --region=us-central1 --allow-unauthenticated --set-env-vars "..."
+
+substitutions:
+  _REGION: us-central1
+  _IMAGE: soulstride-guide-api
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build
+    args:
+      - 'build'
+      - '--progress=plain'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/${_IMAGE}:latest'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/${_IMAGE}:latest'
+    waitFor: ['build']
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/${_IMAGE}:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
