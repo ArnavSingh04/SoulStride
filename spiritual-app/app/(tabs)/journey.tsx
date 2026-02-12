@@ -20,6 +20,7 @@ import { loadPrayerPreferences } from "@/services/prayer-preferences";
 import { getLessonProgressUserId } from "@/services/lesson-progress-user";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFocusEffect } from "@react-navigation/native";
+import { onLessonCompleted } from "@/services/progress";
 
 export default function Journey() {
   const colorScheme = useColorScheme();
@@ -98,6 +99,7 @@ export default function Journey() {
         completed: true,
         completed_at: new Date().toISOString()
       });
+      await onLessonCompleted();
       await journeyRef.current?.refreshProgress();
     },
     [user?.id]

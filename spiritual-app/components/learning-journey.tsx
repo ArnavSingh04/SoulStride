@@ -16,7 +16,13 @@ import {
   RefreshControl
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Path } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, {
+  Path,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Stop
+} from "react-native-svg";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
@@ -33,6 +39,7 @@ const { width, height } = Dimensions.get("window");
 const NODE_SIZE = 64;
 const NODE_SPACING = 32; // Increased to account for labels and prevent overlap
 const PATH_WIDTH = 4;
+const RIVER_WIDTH = 28; // Thick "river" band
 const LABEL_HEIGHT = 44; // Approximate height for lesson label (2 lines of text + spacing)
 const CURVE_CONTROL_OFFSET = 50; // Control point offset for smooth curves
 const LESSONS_PER_BATCH = 10; // Load 10 lessons at a time
@@ -422,6 +429,12 @@ function LearningJourneyInner(
       ? nodes[nodes.length - 1].y + NODE_SIZE + LABEL_HEIGHT + 100
       : height;
 
+  const isDark = colorScheme === "dark";
+  const skyColor = isDark ? "#1a1a2e" : "#e8f4f8";
+  const groundColor = isDark ? "#16213e" : "#d4e8d4";
+  const riverLight = "#5eb4c9";
+  const riverDark = "#2a7a8c";
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -442,37 +455,114 @@ function LearningJourneyInner(
           />
         }
       >
-        {/* Learning Path - Continuous flow */}
+        {/* Learning Path - River and scenery */}
         <View
           style={[styles.pathContainer, { minHeight: currentContentHeight }]}
         >
-          {/* Single SVG for all connection paths */}
+          {/* Background: sky to ground gradient (scenery) */}
+          <LinearGradient
+            colors={[skyColor, groundColor]}
+            style={[styles.sceneryGradient, { height: currentContentHeight }]}
+          />
+          {/* Decorative hills / banks (left and right curved shapes) */}
+          <View style={styles.sceneryHills} pointerEvents="none">
+            <Svg
+              width={width}
+              height={currentContentHeight}
+              style={styles.hillsSvg}
+            >
+              <Defs>
+                <SvgLinearGradient
+                  id="hillLeft"
+                  x1="0%"
+                  y1="100%"
+                  x2="100%"
+                  y2="0%"
+                >
+                  <Stop
+                    offset="0%"
+                    stopColor={isDark ? "#0f3460" : "#a8d5a2"}
+                    stopOpacity={0.85}
+                  />
+                  <Stop
+                    offset="100%"
+                    stopColor={isDark ? "#16213e" : "#c5e8c0"}
+                    stopOpacity={0.6}
+                  />
+                </SvgLinearGradient>
+                <SvgLinearGradient
+                  id="hillRight"
+                  x1="100%"
+                  y1="100%"
+                  x2="0%"
+                  y2="0%"
+                >
+                  <Stop
+                    offset="0%"
+                    stopColor={isDark ? "#0f3460" : "#a8d5a2"}
+                    stopOpacity={0.85}
+                  />
+                  <Stop
+                    offset="100%"
+                    stopColor={isDark ? "#16213e" : "#c5e8c0"}
+                    stopOpacity={0.6}
+                  />
+                </SvgLinearGradient>
+              </Defs>
+              {/* Left bank - curved path */}
+              <Path
+                d={`M 0 ${currentContentHeight} Q ${width * 0.25} ${
+                  currentContentHeight * 0.3
+                } ${
+                  width * 0.38
+                } ${currentContentHeight} L 0 ${currentContentHeight} Z`}
+                fill="url(#hillLeft)"
+              />
+              {/* Right bank */}
+              <Path
+                d={`M ${width} ${currentContentHeight} Q ${width * 0.75} ${
+                  currentContentHeight * 0.4
+                } ${
+                  width * 0.62
+                } ${currentContentHeight} L ${width} ${currentContentHeight} Z`}
+                fill="url(#hillRight)"
+              />
+            </Svg>
+          </View>
+
+          {/* River path (thick band + center line) */}
           <Svg
             style={styles.pathSvg}
             width={width}
             height={currentContentHeight}
           >
+            <Defs>
+              <SvgLinearGradient
+                id="riverGrad"
+                x1="0%"
+                y1="0%"
+                x2="0%"
+                y2="100%"
+              >
+                <Stop offset="0%" stopColor={riverLight} stopOpacity={0.95} />
+                <Stop offset="100%" stopColor={riverDark} stopOpacity={1} />
+              </SvgLinearGradient>
+            </Defs>
             {nodes.map((node, nodeIndex) => {
               const isLast = nodeIndex === nodes.length - 1;
               const nextNode = nodes[nodeIndex + 1];
 
               if (isLast || !nextNode) return null;
 
-              // Calculate start and end points (center of nodes)
               const startX = node.x + NODE_SIZE / 2;
               const startY = node.y + NODE_SIZE + LABEL_HEIGHT;
               const endX = nextNode.x + NODE_SIZE / 2;
               const endY = nextNode.y;
 
-              // Calculate distance and direction
               const deltaX = endX - startX;
               const deltaY = endY - startY;
-              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-              // Create smooth bezier curve with control points
-              // Control points positioned to create a natural flowing curve
               const curveStrength = Math.min(
-                distance * 0.4,
+                Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.4,
                 CURVE_CONTROL_OFFSET
               );
               const controlX1 = startX + deltaX * 0.3;
@@ -480,20 +570,31 @@ function LearningJourneyInner(
               const controlX2 = endX - deltaX * 0.3;
               const controlY2 = endY - curveStrength;
 
-              // Smooth cubic bezier curve
               const pathData = `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`;
 
               return (
-                <Path
-                  key={`path-${node.lesson.id}`}
-                  d={pathData}
-                  stroke={node.completed ? theme.tint : theme.tint}
-                  strokeWidth={PATH_WIDTH}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity={0.6}
-                />
+                <React.Fragment key={`path-${node.lesson.id}`}>
+                  {/* River body (thick stroke) */}
+                  <Path
+                    d={pathData}
+                    stroke="url(#riverGrad)"
+                    strokeWidth={RIVER_WIDTH}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={0.85}
+                  />
+                  {/* River center line */}
+                  <Path
+                    d={pathData}
+                    stroke={node.completed ? theme.tint : riverDark}
+                    strokeWidth={PATH_WIDTH}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={0.8}
+                  />
+                </React.Fragment>
               );
             })}
           </Svg>
@@ -694,22 +795,42 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40
   },
+  sceneryGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0
+  },
+  sceneryHills: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0.5
+  },
+  hillsSvg: {
+    position: "absolute",
+    top: 0,
+    left: 0
+  },
   pathSvg: {
     position: "absolute",
     top: 0,
     left: 0,
-    zIndex: 0
+    zIndex: 1
   },
   nodeContainer: {
     position: "absolute",
     left: 0,
     right: 0,
-    zIndex: 1
+    zIndex: 2
   },
   lessonNodeWrapper: {
     position: "absolute",
     alignItems: "center",
-    zIndex: 1
+    zIndex: 2
   },
   lessonNode: {
     width: NODE_SIZE,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -8,14 +8,15 @@ import {
   ActivityIndicator,
   Animated
 } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Progress from "react-native-progress";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { loadUserProfile } from "@/services/user-profile";
@@ -26,8 +27,10 @@ import {
   loadRoutineConfig,
   getTodayStats,
   getTodayDate,
-  loadTodayCompletion
+  loadTodayCompletion,
+  getRoutineStreak
 } from "@/services/routine-storage";
+import { loadProgress } from "@/services/progress";
 import { getAllPrayers, getPrayerById } from "@/data/prayers";
 import type { PrayerWithLines } from "@/data/prayers";
 import { getNextLessonForUser } from "@/lib/database.service";
@@ -37,25 +40,21 @@ import type { TimeSlot } from "@/types/routine";
 
 const { width } = Dimensions.get("window");
 
-// Calculate streak from completion history
-async function calculateStreak(): Promise<number> {
-  try {
-    const today = getTodayDate();
-    const completion = await loadTodayCompletion();
-    const config = await loadRoutineConfig();
-
-    if (!config) return 0;
-
-    const stats = await getTodayStats(config);
-    if (stats.total > 0 && stats.completed === stats.total) {
-      return 7; // Placeholder - would calculate from history
-    }
-    return 0;
-  } catch (error) {
-    console.error("Error calculating streak:", error);
-    return 0;
-  }
-}
+// Relevant images for cards (cached by expo-image)
+const CARD_IMAGES = {
+  nextLesson:
+    "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=224&h=224&fit=crop",
+  guide:
+    "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=224&h=224&fit=crop",
+  journey:
+    "https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=144&h=144&fit=crop",
+  routine:
+    "https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=144&h=144&fit=crop",
+  prayers:
+    "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=144&h=144&fit=crop",
+  guideQuick:
+    "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=144&h=144&fit=crop"
+};
 
 // Get greeting based on time of day
 function getGreeting(): string {
@@ -151,6 +150,7 @@ export default function HomeScreen() {
 
   const [username, setUsername] = useState<string>("");
   const [streakDays, setStreakDays] = useState<number>(0);
+  const [routineStreakDays, setRoutineStreakDays] = useState<number>(0);
   const [xp, setXp] = useState<number>(0);
   const [routineProgress, setRoutineProgress] = useState<number>(0);
   const [routineStats, setRoutineStats] = useState({ completed: 0, total: 0 });
@@ -159,42 +159,54 @@ export default function HomeScreen() {
     timeSlot: TimeSlot;
   } | null>(null);
   const [nextLesson, setNextLesson] = useState<LessonWithBlocks | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     loadHomeData();
-    // Fade in animation
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 600,
+      duration: 400,
       useNativeDriver: true
     }).start();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadHomeData();
+    }, [])
+  );
 
   const loadHomeData = async () => {
     try {
       setLoading(true);
 
-      const profile = await loadUserProfile();
-      setUsername(profile.name || "Friend");
+      const [profile, config, progressData, prefs] = await Promise.all([
+        loadUserProfile(),
+        loadRoutineConfig(),
+        loadProgress(),
+        loadPrayerPreferences()
+      ]);
 
-      const config = await loadRoutineConfig();
+      setUsername(profile.name || "Friend");
+      setXp(progressData.xp);
+      setStreakDays(progressData.streakDays);
+
       if (config) {
-        const stats = await getTodayStats(config);
+        const [stats, nextPrayerResult, routineStreak] = await Promise.all([
+          getTodayStats(config),
+          getNextPrayer(),
+          getRoutineStreak(config)
+        ]);
         setRoutineStats(stats);
         const progress = stats.total > 0 ? stats.completed / stats.total : 0;
         setRoutineProgress(progress);
-        setXp(stats.completed * 10);
-
-        const next = await getNextPrayer();
-        setNextPrayer(next);
+        setNextPrayer(nextPrayerResult);
+        setRoutineStreakDays(routineStreak);
+      } else {
+        setRoutineStreakDays(0);
       }
 
-      const streak = await calculateStreak();
-      setStreakDays(streak);
-
-      const prefs = await loadPrayerPreferences();
       const holyBookId = prefs?.selectedHolyBookIds?.[0];
       if (holyBookId) {
         const userId = await getLessonProgressUserId(user?.id ?? null);
@@ -215,42 +227,31 @@ export default function HomeScreen() {
       id: "journey",
       title: "Journey",
       subtitle: "Continue learning",
-      icon: "book.fill",
+      imageUri: CARD_IMAGES.journey,
       route: "/(tabs)/journey"
     },
     {
       id: "routine",
       title: "Routine",
       subtitle: "Build habits",
-      icon: "calendar",
+      imageUri: CARD_IMAGES.routine,
       route: "/(tabs)/routine"
     },
     {
       id: "prayers",
       title: "Prayers",
       subtitle: "Sacred verses",
-      icon: "heart.fill",
+      imageUri: CARD_IMAGES.prayers,
       route: "/(tabs)/prayers"
     },
     {
       id: "guide",
       title: "Guide",
       subtitle: "Ask questions",
-      icon: "sparkles",
+      imageUri: CARD_IMAGES.guideQuick,
       route: "/(tabs)/guide"
     }
   ];
-
-  if (loading) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.tint} />
-        <ThemedText style={[styles.loadingText, { color: theme.icon }]}>
-          Loading...
-        </ThemedText>
-      </ThemedView>
-    );
-  }
 
   return (
     <ThemedView style={styles.container}>
@@ -261,6 +262,11 @@ export default function HomeScreen() {
       >
         {/* Header with Greeting */}
         <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
+          {loading && (
+            <View style={styles.headerLoadingBar}>
+              <ActivityIndicator size="small" color={theme.tint} />
+            </View>
+          )}
           <View style={styles.greetingContainer}>
             <View style={styles.greetingIconContainer}>
               <Ionicons
@@ -422,7 +428,9 @@ export default function HomeScreen() {
                     </View>
                     <ThemedText type="subtitle" style={styles.xpText}>
                       Current Streak{"\n"}
-                      <ThemedText type="title">{streakDays} Days</ThemedText>
+                      <ThemedText type="title">
+                        {routineStreakDays} Days
+                      </ThemedText>
                     </ThemedText>
                   </View>
 
@@ -513,12 +521,11 @@ export default function HomeScreen() {
             }}
           >
             <View style={styles.lessonHeader}>
-              <LinearGradient
-                colors={[theme.tint + "20", theme.tint + "10"]}
-                style={styles.lessonIcon}
-              >
-                <IconSymbol name="book.fill" size={24} color={theme.tint} />
-              </LinearGradient>
+              <Image
+                source={{ uri: CARD_IMAGES.nextLesson }}
+                style={styles.lessonImage}
+                contentFit="cover"
+              />
               <View style={styles.lessonContent}>
                 <ThemedText type="subtitle" style={styles.lessonTitle}>
                   {nextLesson
@@ -572,12 +579,11 @@ export default function HomeScreen() {
               style={styles.guideGradient}
             >
               <View style={styles.guideHeader}>
-                <LinearGradient
-                  colors={[theme.tint + "25", theme.tint + "15"]}
-                  style={styles.guideIcon}
-                >
-                  <IconSymbol name="sparkles" size={24} color={theme.tint} />
-                </LinearGradient>
+                <Image
+                  source={{ uri: CARD_IMAGES.guide }}
+                  style={styles.guideImage}
+                  contentFit="cover"
+                />
                 <View style={styles.guideContent}>
                   <ThemedText type="subtitle" style={styles.guideTitle}>
                     Ask Your Spiritual Guide
@@ -636,18 +642,11 @@ export default function HomeScreen() {
                 activeOpacity={0.85}
                 onPress={() => router.push(c.route as any)}
               >
-                <View
-                  style={[
-                    styles.iconCircle,
-                    { backgroundColor: theme.tint + "15" }
-                  ]}
-                >
-                  <IconSymbol
-                    name={c.icon as any}
-                    size={18}
-                    color={theme.tint}
-                  />
-                </View>
+                <Image
+                  source={{ uri: c.imageUri }}
+                  style={styles.quickCardImage}
+                  contentFit="cover"
+                />
                 <View style={styles.quickTextContainer}>
                   <ThemedText
                     type="subtitle"
@@ -701,6 +700,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 24
+  },
+  headerLoadingBar: {
+    position: "absolute",
+    top: 44,
+    right: 20,
+    zIndex: 1
   },
   greetingContainer: {
     flexDirection: "row",
@@ -888,12 +893,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center"
   },
-  lessonIcon: {
+  lessonImage: {
     width: 56,
     height: 56,
     borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
     marginRight: 16
   },
   chevronContainer: {
@@ -938,12 +941,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center"
   },
-  guideIcon: {
+  guideImage: {
     width: 56,
     height: 56,
     borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
     marginRight: 16
   },
   guideContent: {
@@ -976,13 +977,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10
+  quickCardImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    marginRight: 12
   },
   quickTextContainer: {
     flex: 1,
