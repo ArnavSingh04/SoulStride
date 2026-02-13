@@ -23,7 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { router } from "expo-router";
 import { getAllHolyBooks } from "@/lib/database.service";
 import type { HolyBook } from "@/lib/database.types";
-import { loadUserProfile, resetOnboarding } from "@/services/user-profile";
+import { loadUserProfile } from "@/services/user-profile";
 import {
   useThemePreference,
   type ThemeMode
@@ -628,34 +628,6 @@ export default function Settings() {
               />
             </View>
           </View>
-        </View>
-
-        {/* Debug / Development Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="construct-outline" size={24} color={theme.tint} />
-            <ThemedText type="title" style={styles.sectionTitle}>
-              Development
-            </ThemedText>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.authButton,
-              { backgroundColor: "#ff4444", marginTop: 8 }
-            ]}
-            onPress={async () => {
-              await resetOnboarding();
-              Alert.alert(
-                "Onboarding Reset",
-                "Onboarding has been reset. Please restart the app to see the onboarding flow again.",
-                [{ text: "OK", onPress: () => router.replace("/") }]
-              );
-            }}
-          >
-            <ThemedText style={styles.authButtonText}>
-              Reset Onboarding Flow
-            </ThemedText>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </ThemedView>

@@ -16,6 +16,7 @@ import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/contexts/AuthContext";
+import { isOnboardingComplete } from "@/services/user-profile";
 import { router } from "expo-router";
 
 export default function LoginScreen() {
@@ -46,7 +47,8 @@ export default function LoginScreen() {
           : error.message || "Invalid email or password";
         Alert.alert("Login Failed", message);
       } else {
-        router.replace("/(tabs)");
+        const completed = await isOnboardingComplete();
+        router.replace(completed ? "/(tabs)" : "/onboarding");
       }
     } catch (error) {
       Alert.alert("Error", "An unexpected error occurred");

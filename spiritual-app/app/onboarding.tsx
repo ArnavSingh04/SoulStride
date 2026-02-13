@@ -1,54 +1,63 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { getAllHolyBooks } from '@/lib/database.service';
-import type { HolyBook } from '@/lib/database.types';
-import { loadPrayerPreferences, savePrayerPreferences } from '@/services/prayer-preferences';
+  View
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { getAllHolyBooks } from "@/lib/database.service";
+import type { HolyBook } from "@/lib/database.types";
+import {
+  loadPrayerPreferences,
+  savePrayerPreferences
+} from "@/services/prayer-preferences";
 import {
   setOnboardingComplete,
   updateUserProfile,
-  type ComfortLanguage,
-} from '@/services/user-profile';
+  type ComfortLanguage
+} from "@/services/user-profile";
 
 type Step = 0 | 1 | 2 | 3;
 
 const DAILY_MINUTE_OPTIONS = [5, 10, 15, 30, 45, 60] as const; // includes >30
-const LANGUAGE_OPTIONS: ComfortLanguage[] = ['english', 'punjabi', 'hindi'];
+const LANGUAGE_OPTIONS: ComfortLanguage[] = ["english", "punjabi", "hindi"];
 
 export default function Onboarding() {
   const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const theme = Colors[colorScheme ?? "light"];
   const [step, setStep] = useState<Step>(0);
   const [loading, setLoading] = useState(true);
   const [holyBooks, setHolyBooks] = useState<HolyBook[]>([]);
 
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
   const [selectedHolyBookIds, setSelectedHolyBookIds] = useState<string[]>([]);
-  const [dailyMinutes, setDailyMinutes] = useState<(typeof DAILY_MINUTE_OPTIONS)[number]>(10);
-  const [comfortLanguage, setComfortLanguage] = useState<ComfortLanguage>('english');
+  const [dailyMinutes, setDailyMinutes] =
+    useState<(typeof DAILY_MINUTE_OPTIONS)[number]>(10);
+  const [comfortLanguage, setComfortLanguage] =
+    useState<ComfortLanguage>("english");
 
   useEffect(() => {
     (async () => {
       try {
-        const [books, prefs] = await Promise.all([getAllHolyBooks(), loadPrayerPreferences()]);
+        const [books, prefs] = await Promise.all([
+          getAllHolyBooks(),
+          loadPrayerPreferences()
+        ]);
         setHolyBooks(books);
-        if (prefs?.selectedHolyBookIds?.length) setSelectedHolyBookIds(prefs.selectedHolyBookIds);
-        if (prefs?.primaryLanguage) setComfortLanguage(prefs.primaryLanguage as ComfortLanguage);
+        if (prefs?.selectedHolyBookIds?.length)
+          setSelectedHolyBookIds(prefs.selectedHolyBookIds);
+        if (prefs?.primaryLanguage)
+          setComfortLanguage(prefs.primaryLanguage as ComfortLanguage);
       } catch (e) {
-        console.error('Error loading onboarding data:', e);
+        console.error("Error loading onboarding data:", e);
       } finally {
         setLoading(false);
       }
@@ -67,51 +76,33 @@ export default function Onboarding() {
     );
   };
 
-  const skip = async () => {
-    Alert.alert(
-      'Skip setup?',
-      'You can set your holy book and preferences later in Settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Skip',
-          style: 'destructive',
-          onPress: async () => {
-            await setOnboardingComplete(true);
-            router.replace('/(tabs)');
-          },
-        },
-      ]
-    );
-  };
-
   const finish = async () => {
     const prefs = await loadPrayerPreferences();
     await savePrayerPreferences({
       ...prefs,
       primaryLanguage: comfortLanguage,
-      translationLanguage: prefs.translationLanguage ?? 'english',
+      translationLanguage: prefs.translationLanguage ?? "english",
       showOriginal: true,
       showTranslation: true,
       showTransliteration: true,
-      selectedHolyBookIds,
+      selectedHolyBookIds
     });
 
     await updateUserProfile({
       name: name.trim(),
       dailyMinutes,
       comfortLanguage,
-      selectedHolyBookIds,
+      selectedHolyBookIds
     });
 
     await setOnboardingComplete(true);
-    router.replace('/(tabs)');
+    router.replace("/(tabs)");
   };
 
   const continueNext = async () => {
     if (!canContinue) return;
     if (step < 3) {
-      setStep((s) => ((s + 1) as Step));
+      setStep((s) => (s + 1) as Step);
       return;
     }
     await finish();
@@ -119,7 +110,7 @@ export default function Onboarding() {
 
   const back = () => {
     if (step === 0) return;
-    setStep((s) => ((s - 1) as Step));
+    setStep((s) => (s - 1) as Step);
   };
 
   if (loading) {
@@ -137,16 +128,22 @@ export default function Onboarding() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.topRow}>
-          <TouchableOpacity onPress={skip} style={styles.topLink}>
-            <ThemedText style={{ color: theme.icon }}>Skip</ThemedText>
-          </TouchableOpacity>
           <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.topLink}>
+          <TouchableOpacity
+            onPress={() => router.push("/auth/login")}
+            style={styles.topLink}
+          >
             <ThemedText style={{ color: theme.icon }}>Sign In</ThemedText>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/auth/signup')} style={styles.topLink}>
+          <TouchableOpacity
+            onPress={() => router.push("/auth/signup")}
+            style={styles.topLink}
+          >
             <ThemedText style={{ color: theme.icon }}>Sign Up</ThemedText>
           </TouchableOpacity>
         </View>
@@ -172,9 +169,10 @@ export default function Onboarding() {
                 style={[
                   styles.input,
                   {
-                    backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0',
-                    color: theme.text,
-                  },
+                    backgroundColor:
+                      colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
+                    color: theme.text
+                  }
                 ]}
               />
             </>
@@ -199,15 +197,18 @@ export default function Onboarding() {
                       style={[
                         styles.bookRow,
                         {
-                          backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0',
+                          backgroundColor:
+                            colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
                           borderColor: selected
-                            ? (colorScheme === 'dark' ? '#4a4a4a' : theme.tint)
-                            : 'rgba(128,128,128,0.25)',
-                        },
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : "rgba(128,128,128,0.25)"
+                        }
                       ]}
                     >
                       <Ionicons
-                        name={selected ? 'checkbox' : 'square-outline'}
+                        name={selected ? "checkbox" : "square-outline"}
                         size={22}
                         color={selected ? theme.tint : theme.icon}
                         style={{ marginRight: 12 }}
@@ -215,7 +216,9 @@ export default function Onboarding() {
                       <View style={{ flex: 1 }}>
                         <ThemedText type="defaultSemiBold">{b.name}</ThemedText>
                         {!!b.name_punjabi && (
-                          <ThemedText style={{ color: theme.icon, opacity: 0.8 }}>
+                          <ThemedText
+                            style={{ color: theme.icon, opacity: 0.8 }}
+                          >
                             {b.name_punjabi}
                           </ThemedText>
                         )}
@@ -247,17 +250,23 @@ export default function Onboarding() {
                         styles.pill,
                         {
                           backgroundColor: selected
-                            ? (colorScheme === 'dark' ? '#4a4a4a' : theme.tint)
-                            : colorScheme === 'dark'
-                              ? '#2a2a2a'
-                              : '#f0f0f0',
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : colorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f0f0f0",
                           borderColor: selected
-                            ? (colorScheme === 'dark' ? '#4a4a4a' : theme.tint)
-                            : 'transparent',
-                        },
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : "transparent"
+                        }
                       ]}
                     >
-                      <ThemedText style={{ color: selected ? '#fff' : theme.text }}>
+                      <ThemedText
+                        style={{ color: selected ? "#fff" : theme.text }}
+                      >
                         {m}m
                       </ThemedText>
                     </TouchableOpacity>
@@ -287,17 +296,23 @@ export default function Onboarding() {
                         styles.pill,
                         {
                           backgroundColor: selected
-                            ? (colorScheme === 'dark' ? '#4a4a4a' : theme.tint)
-                            : colorScheme === 'dark'
-                              ? '#2a2a2a'
-                              : '#f0f0f0',
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : colorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f0f0f0",
                           borderColor: selected
-                            ? (colorScheme === 'dark' ? '#4a4a4a' : theme.tint)
-                            : 'transparent',
-                        },
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : "transparent"
+                        }
                       ]}
                     >
-                      <ThemedText style={{ color: selected ? '#fff' : theme.text }}>
+                      <ThemedText
+                        style={{ color: selected ? "#fff" : theme.text }}
+                      >
                         {l.charAt(0).toUpperCase() + l.slice(1)}
                       </ThemedText>
                     </TouchableOpacity>
@@ -322,13 +337,14 @@ export default function Onboarding() {
             style={[
               styles.navButtonPrimary,
               {
-                backgroundColor: colorScheme === 'dark' ? '#4a4a4a' : theme.tint,
-                opacity: canContinue ? 1 : 0.5,
-              },
+                backgroundColor:
+                  colorScheme === "dark" ? "#4a4a4a" : theme.tint,
+                opacity: canContinue ? 1 : 0.5
+              }
             ]}
           >
-            <ThemedText style={{ color: '#fff', fontWeight: '600' }}>
-              {step === 3 ? 'Finish' : 'Continue'}
+            <ThemedText style={{ color: "#fff", fontWeight: "600" }}>
+              {step === 3 ? "Finish" : "Continue"}
             </ThemedText>
           </TouchableOpacity>
         </View>
@@ -339,16 +355,21 @@ export default function Onboarding() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10
+  },
   topLink: { paddingVertical: 6, paddingHorizontal: 8 },
   title: { fontSize: 28, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 18 },
   card: {
     borderRadius: 16,
     padding: 16,
-    backgroundColor: 'rgba(128,128,128,0.10)',
+    backgroundColor: "rgba(128,128,128,0.10)"
   },
   cardTitle: { fontSize: 16, marginBottom: 10 },
   cardSubtitle: { fontSize: 13, lineHeight: 18 },
@@ -357,42 +378,41 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 16,
-    marginTop: 10,
+    marginTop: 10
   },
   bookRow: {
     borderRadius: 12,
     padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 2
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginTop: 14,
-    flexWrap: 'wrap',
+    flexWrap: "wrap"
   },
   pill: {
     borderRadius: 999,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderWidth: 2,
+    borderWidth: 2
   },
-  navRow: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  navRow: { flexDirection: "row", gap: 12, marginTop: 18 },
   navButton: {
     flex: 1,
     height: 46,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(128,128,128,0.12)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(128,128,128,0.12)"
   },
   navButtonPrimary: {
     flex: 1,
     height: 46,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    alignItems: "center",
+    justifyContent: "center"
+  }
 });
-
