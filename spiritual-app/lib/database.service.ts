@@ -442,14 +442,14 @@ export async function searchLessons(
 
 /**
  * Get completed lessons for a user and holy book (lesson_id + order_index for
- * section/unlock logic).
+ * section/unlock logic, and score for star display).
  */
 export async function getCompletedLessonsForHolyBook(
-    userId: string,
-    holyBookId: string): Promise<{lesson_id: string; order_index: number}[]> {
+    userId: string, holyBookId: string):
+    Promise<{lesson_id: string; order_index: number; score?: number}[]> {
   const {data: progressRows, error: progressError} =
       await supabase.from('lesson_progress')
-          .select('lesson_id')
+          .select('lesson_id, score')
           .eq('user_id', userId)
           .eq('completed', true);
 
@@ -460,6 +460,9 @@ export async function getCompletedLessonsForHolyBook(
   }
 
   const lessonIds = progressRows.map((r) => r.lesson_id);
+  const progressByLesson = new Map(
+      progressRows.map((r) => [r.lesson_id, r.score as number | undefined]));
+
   const {data: lessons, error: lessonsError} =
       await supabase.from('lessons')
           .select('id, order_index')
@@ -472,7 +475,11 @@ export async function getCompletedLessonsForHolyBook(
     return [];
   }
 
-  return lessons.map((l) => ({lesson_id: l.id, order_index: l.order_index}));
+  return lessons.map((l) => ({
+                       lesson_id: l.id,
+                       order_index: l.order_index,
+                       score: progressByLesson.get(l.id)
+                     }));
 }
 
 const LESSONS_PER_SECTION = 5;

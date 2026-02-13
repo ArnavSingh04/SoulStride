@@ -22,8 +22,8 @@ interface LessonViewerProps {
   visible: boolean;
   lesson: LessonWithBlocks | null;
   onClose: () => void;
-  /** Called when user completes the lesson (reaches last slide and taps Complete). */
-  onComplete?: (lesson: LessonWithBlocks) => void;
+  /** Called when user completes the lesson (reaches last slide and taps Complete). Optional score 0–100 from situation/questions. */
+  onComplete?: (lesson: LessonWithBlocks, score?: number) => void;
 }
 
 export default function LessonViewer({
@@ -55,12 +55,28 @@ export default function LessonViewer({
   const isLastBlock = currentBlockIndex === blocks.length - 1;
   const totalBlocks = blocks.length;
 
+  /** Compute score 0–100 from blocks that report isCorrect (scenario_choice, micro_quiz, question, etc.). No attempts = 0 (1 star). */
+  const computeLessonScore = (): number => {
+    let graded = 0;
+    let correct = 0;
+    blocks.forEach((block) => {
+      const answer = blockAnswers[block.id];
+      if (answer != null && typeof answer.isCorrect === "boolean") {
+        graded += 1;
+        if (answer.isCorrect) correct += 1;
+      }
+    });
+    if (graded === 0) return 0; // didn't attempt any questions → 1 star
+    return Math.round((correct / graded) * 100);
+  };
+
   const handleNext = () => {
     if (currentBlockIndex < blocks.length - 1) {
       setCurrentBlockIndex(currentBlockIndex + 1);
     } else {
-      // Lesson complete
-      onComplete?.(lesson);
+      // Lesson complete: pass score for star display
+      const score = computeLessonScore();
+      onComplete?.(lesson, score);
       onClose();
     }
   };

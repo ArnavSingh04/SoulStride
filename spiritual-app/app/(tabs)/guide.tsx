@@ -7,8 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Platform,
-  Alert
+  Platform
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -286,20 +285,6 @@ export default function Guide() {
                   <Ionicons name="arrow-forward" size={16} color={theme.tint} />
                 </TouchableOpacity>
               ))}
-
-              {/* Useful during debugging; remove when stable */}
-              <TouchableOpacity
-                style={[styles.debugChip, { borderColor: theme.icon }]}
-                onPress={() =>
-                  Alert.alert("Guide API URL", GUIDE_API_URL, [{ text: "OK" }])
-                }
-              >
-                <ThemedText
-                  style={[styles.debugChipText, { color: theme.icon }]}
-                >
-                  Debug: show API URL
-                </ThemedText>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -414,17 +399,5 @@ const styles = StyleSheet.create({
   suggestionText: {
     flex: 1,
     fontSize: 14
-  },
-
-  debugChip: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignSelf: "center"
-  },
-  debugChipText: {
-    fontSize: 12
   }
 });

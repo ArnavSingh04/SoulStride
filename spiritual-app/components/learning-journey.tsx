@@ -38,8 +38,8 @@ import type { LessonWithBlocks } from "@/lib/database.types";
 const { width, height } = Dimensions.get("window");
 const NODE_SIZE = 64;
 const NODE_SPACING = 32; // Increased to account for labels and prevent overlap
-const PATH_WIDTH = 4;
-const RIVER_WIDTH = 28; // Thick "river" band
+const PATH_WIDTH = 1.5;
+const RIVER_WIDTH = 10; // Slim river band between nodes
 const LABEL_HEIGHT = 44; // Approximate height for lesson label (2 lines of text + spacing)
 const CURVE_CONTROL_OFFSET = 50; // Control point offset for smooth curves
 const LESSONS_PER_BATCH = 10; // Load 10 lessons at a time
@@ -58,6 +58,7 @@ export interface LearningJourneyRef {
 interface CompletedLesson {
   lesson_id: string;
   order_index: number;
+  score?: number;
 }
 
 interface LessonNode {
@@ -69,6 +70,8 @@ interface LessonNode {
   sectionIndex: number;
   isCheckpoint?: boolean;
   isSpecial?: boolean; // For treasure chests, special lessons
+  /** 1–3 stars based on lesson score (situation/questions correct). */
+  stars?: number;
 }
 
 function isSectionUnlocked(
@@ -86,6 +89,13 @@ function isSectionUnlocked(
     }
   }
   return true;
+}
+
+/** Convert stored score (0–100) to 1–3 stars. No score = 3 stars (backwards compat). */
+function scoreToStars(score?: number): 1 | 2 | 3 {
+  if (score == null || score >= 80) return 3;
+  if (score >= 50) return 2;
+  return 1;
 }
 
 function LearningJourneyInner(
@@ -213,6 +223,9 @@ function LearningJourneyInner(
   ) => {
     const completedLessonIds = new Set(completed.map((c) => c.lesson_id));
     const completedOrderIndices = new Set(completed.map((c) => c.order_index));
+    const scoreByLessonId = new Map(
+      completed.map((c) => [c.lesson_id, c.score])
+    );
     const allNodes: LessonNode[] = [];
     let currentY = 20;
 
@@ -245,7 +258,10 @@ function LearningJourneyInner(
           globalIndex + 1 >= LESSONS_PER_SECTION,
         isSpecial:
           lesson.lesson_type === "checkpoint" ||
-          lesson.id.includes("checkpoint")
+          lesson.id.includes("checkpoint"),
+        stars: completed_
+          ? scoreToStars(scoreByLessonId.get(lesson.id))
+          : undefined
       });
 
       currentY += NODE_SIZE + NODE_SPACING + LABEL_HEIGHT;
@@ -554,6 +570,7 @@ function LearningJourneyInner(
 
               if (isLast || !nextNode) return null;
 
+              // Connect center-bottom of current node to center-top of next (reliable, no haywire lines)
               const startX = node.x + NODE_SIZE / 2;
               const startY = node.y + NODE_SIZE + LABEL_HEIGHT;
               const endX = nextNode.x + NODE_SIZE / 2;
@@ -582,7 +599,7 @@ function LearningJourneyInner(
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={0.85}
+                    opacity={0.6}
                   />
                   {/* River center line */}
                   <Path
@@ -592,7 +609,7 @@ function LearningJourneyInner(
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={0.8}
+                    opacity={0.75}
                   />
                 </React.Fragment>
               );
@@ -684,10 +701,10 @@ function LearningJourneyInner(
                       color="#FFFFFF"
                     />
                   </TouchableOpacity>
-                  {/* Progress Stars (for completed lessons) */}
+                  {/* Progress Stars (for completed lessons; 1–3 based on score) */}
                   {node.completed && (
                     <View style={styles.starsContainer}>
-                      {[1, 2, 3].map((star) => (
+                      {[1, 2, 3].slice(0, node.stars ?? 3).map((star) => (
                         <Ionicons
                           key={star}
                           name="star"
