@@ -1,9 +1,10 @@
+import {getStorageUserId} from '@/services/storage-scope';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const USER_PROFILE_KEY = '@soulstride:user-profile';
-const ONBOARDING_COMPLETE_KEY = '@soulstride:onboarding-complete';
+const USER_PROFILE_KEY_PREFIX = '@soulstride:user-profile:';
+const ONBOARDING_COMPLETE_KEY_PREFIX = '@soulstride:onboarding-complete:';
 
-export type ComfortLanguage = 'punjabi' | 'english' | 'hindi';
+export type ComfortLanguage = 'punjabi'|'english'|'hindi';
 
 export interface UserProfile {
   name: string;
@@ -28,10 +29,11 @@ export function getDefaultUserProfile(): UserProfile {
 
 export async function loadUserProfile(): Promise<UserProfile> {
   try {
-    const data = await AsyncStorage.getItem(USER_PROFILE_KEY);
+    const userId = await getStorageUserId();
+    const data = await AsyncStorage.getItem(USER_PROFILE_KEY_PREFIX + userId);
     if (!data) return getDefaultUserProfile();
     const parsed = JSON.parse(data);
-    return { ...getDefaultUserProfile(), ...parsed };
+    return {...getDefaultUserProfile(), ...parsed};
   } catch (e) {
     console.error('Error loading user profile:', e);
     return getDefaultUserProfile();
@@ -39,10 +41,13 @@ export async function loadUserProfile(): Promise<UserProfile> {
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
-  await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+  const userId = await getStorageUserId();
+  await AsyncStorage.setItem(
+      USER_PROFILE_KEY_PREFIX + userId, JSON.stringify(profile));
 }
 
-export async function updateUserProfile(patch: Partial<UserProfile>): Promise<UserProfile> {
+export async function updateUserProfile(patch: Partial<UserProfile>):
+    Promise<UserProfile> {
   const current = await loadUserProfile();
   const updated: UserProfile = {
     ...current,
@@ -55,7 +60,9 @@ export async function updateUserProfile(patch: Partial<UserProfile>): Promise<Us
 
 export async function isOnboardingComplete(): Promise<boolean> {
   try {
-    const v = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
+    const userId = await getStorageUserId();
+    const v =
+        await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY_PREFIX + userId);
     return v === 'true';
   } catch {
     return false;
@@ -63,10 +70,15 @@ export async function isOnboardingComplete(): Promise<boolean> {
 }
 
 export async function setOnboardingComplete(value: boolean): Promise<void> {
-  await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, value ? 'true' : 'false');
+  const userId = await getStorageUserId();
+  await AsyncStorage.setItem(
+      ONBOARDING_COMPLETE_KEY_PREFIX + userId, value ? 'true' : 'false');
 }
 
 export async function resetOnboarding(): Promise<void> {
-  await AsyncStorage.multiRemove([USER_PROFILE_KEY, ONBOARDING_COMPLETE_KEY]);
+  const userId = await getStorageUserId();
+  await AsyncStorage.multiRemove([
+    USER_PROFILE_KEY_PREFIX + userId,
+    ONBOARDING_COMPLETE_KEY_PREFIX + userId,
+  ]);
 }
-

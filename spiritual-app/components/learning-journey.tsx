@@ -129,7 +129,7 @@ function LearningJourneyInner(
     try {
       setLoading(true);
       setError(null);
-      const userId = await getLessonProgressUserId(user?.id ?? null);
+      const userId = await getLessonProgressUserId();
       const [{ lessons, hasMore: more }, completed] = await Promise.all([
         getLessonsPaginated(holyBookId, LESSONS_PER_BATCH, 0),
         getCompletedLessonsForHolyBook(userId, holyBookId)
@@ -182,7 +182,7 @@ function LearningJourneyInner(
   /** Refetch completed progress and regenerate nodes (e.g. after user completes a lesson). */
   const refreshProgress = useCallback(async () => {
     if (!holyBookId || displayedLessons.length === 0) return;
-    const userId = await getLessonProgressUserId(user?.id ?? null);
+    const userId = await getLessonProgressUserId();
     const completed = await getCompletedLessonsForHolyBook(userId, holyBookId);
     setCompletedLessons(completed);
     generateNodes(displayedLessons, completed);

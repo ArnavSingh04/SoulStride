@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -6,14 +6,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { RoutineConfig, TimeSlot } from '@/types/routine';
-import { TIME_SLOT_LABELS } from '@/types/routine';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { RoutineConfig, TimeSlot } from "@/types/routine";
+import { TIME_SLOT_LABELS } from "@/types/routine";
 import {
   loadRoutineConfig,
   saveRoutineConfig,
@@ -21,27 +21,41 @@ import {
   togglePrayerCompletion,
   getTodayStats,
   getTodayDate
-} from '@/services/routine-storage';
-import { scheduleRoutineReminders } from '@/services/notifications';
-import { getAllPrayers, getPrayerById, Prayer, PrayerWithLines } from '@/data/prayers';
-import RoutineEditModal from '@/components/routine-edit-modal';
+} from "@/services/routine-storage";
+import { scheduleRoutineReminders } from "@/services/notifications";
+import {
+  getAllPrayers,
+  getPrayerById,
+  Prayer,
+  PrayerWithLines
+} from "@/data/prayers";
+import RoutineEditModal from "@/components/routine-edit-modal";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Routine() {
   const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const theme = Colors[colorScheme ?? "light"];
+  const { user } = useAuth();
   const [config, setConfig] = useState<RoutineConfig | null>(null);
   const [completion, setCompletion] = useState<any>(null);
   const [stats, setStats] = useState({ completed: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedPrayer, setSelectedPrayer] = useState<PrayerWithLines | null>(null);
-  const [prayersCache, setPrayersCache] = useState<Map<string, Prayer>>(new Map());
+  const [selectedPrayer, setSelectedPrayer] = useState<PrayerWithLines | null>(
+    null
+  );
+  const [prayersCache, setPrayersCache] = useState<Map<string, Prayer>>(
+    new Map()
+  );
   const [currentDate, setCurrentDate] = useState(() => {
     try {
       return getTodayDate();
     } catch (e) {
       const today = new Date();
-      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(today.getDate()).padStart(2, "0")}`;
     }
   });
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +74,11 @@ export default function Routine() {
     return () => clearInterval(interval);
   }, []);
 
+  // Refetch when user/account changes so routine is for the signed-in account
+  useEffect(() => {
+    loadData();
+  }, [user?.id]);
+
   useEffect(() => {
     // Schedule reminders when config changes
     if (config) {
@@ -76,24 +95,26 @@ export default function Routine() {
         loadTodayCompletion(),
         getAllPrayers()
       ]);
-      
+
       // Build prayers cache
       const cache = new Map<string, Prayer>();
-      allPrayers.forEach(prayer => {
+      allPrayers.forEach((prayer) => {
         cache.set(prayer.id, prayer);
       });
       setPrayersCache(cache);
-      
+
       setConfig(routineConfig);
       setCompletion(todayCompletion);
-      
+
       if (routineConfig) {
         const todayStats = await getTodayStats(routineConfig);
         setStats(todayStats);
       }
     } catch (error) {
-      console.error('Error loading routine data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load routine');
+      console.error("Error loading routine data:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to load routine"
+      );
       // Set default config on error
       const defaultConfig = {
         slots: Object.keys(TIME_SLOT_LABELS).map((slot) => ({
@@ -121,25 +142,25 @@ export default function Routine() {
       const newStats = await getTodayStats(newConfig);
       setStats(newStats);
     } catch (error) {
-      console.error('Error saving routine config:', error);
+      console.error("Error saving routine config:", error);
     }
   };
 
   const handleToggleCompletion = async (prayerId: string) => {
     if (!completion) return;
-    
+
     const isCompleted = completion.completedPrayers[prayerId] || false;
     try {
       await togglePrayerCompletion(prayerId, !isCompleted);
       const updatedCompletion = await loadTodayCompletion();
       setCompletion(updatedCompletion);
-      
+
       if (config) {
         const newStats = await getTodayStats(config);
         setStats(newStats);
       }
     } catch (error) {
-      console.error('Error toggling completion:', error);
+      console.error("Error toggling completion:", error);
     }
   };
 
@@ -177,9 +198,12 @@ export default function Routine() {
           </ThemedText>
           <TouchableOpacity
             onPress={loadData}
-            style={[styles.createButton, { backgroundColor: theme.tint, marginTop: 16 }]}
+            style={[
+              styles.createButton,
+              { backgroundColor: theme.tint, marginTop: 16 }
+            ]}
           >
-            <ThemedText style={{ color: '#fff', fontWeight: '600' }}>
+            <ThemedText style={{ color: "#fff", fontWeight: "600" }}>
               Retry
             </ThemedText>
           </TouchableOpacity>
@@ -203,7 +227,12 @@ export default function Routine() {
             onPress={() => setShowEditModal(true)}
             style={[styles.createButton, { backgroundColor: theme.tint }]}
           >
-            <ThemedText style={{ color: colorScheme === 'dark' ? '#000' : '#fff', fontWeight: '600' }}>
+            <ThemedText
+              style={{
+                color: colorScheme === "dark" ? "#000" : "#fff",
+                fontWeight: "600"
+              }}
+            >
               Create Routine
             </ThemedText>
           </TouchableOpacity>
@@ -212,7 +241,7 @@ export default function Routine() {
     );
   }
 
-  const allPrayerIds = config.slots.flatMap(slot => slot.prayerIds);
+  const allPrayerIds = config.slots.flatMap((slot) => slot.prayerIds);
   const uniquePrayerIds = Array.from(new Set(allPrayerIds));
   const hasAnyPrayers = uniquePrayerIds.length > 0;
 
@@ -242,51 +271,65 @@ export default function Routine() {
         </View>
 
         {/* Stats Card */}
-        {stats.total > 0 && (() => {
-          const percentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-          let progressColor = '#FF6B6B'; // Red for low progress
-          if (percentage >= 100) {
-            progressColor = '#4ECDC4'; // Green for 100%
-          } else if (percentage >= 50) {
-            progressColor = '#FFD93D'; // Yellow for 50%+
-          } else if (percentage >= 25) {
-            progressColor = '#FFA07A'; // Orange for 25%+
-          }
-          
-          return (
-            <View
-              style={[
-                styles.statsCard,
-                {
-                  backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f8f8f8',
-                  borderLeftColor: progressColor
-                }
-              ]}
-            >
-              <View style={styles.statsContent}>
-                <View>
-                  <ThemedText type="subtitle" style={styles.statsTitle}>
-                    Today's Progress
-                  </ThemedText>
-                  <ThemedText style={[styles.statsSubtitle, { color: theme.icon }]}>
-                    {stats.completed} of {stats.total} prayers completed
-                  </ThemedText>
-                </View>
-                <View style={[styles.progressCircle, { borderColor: progressColor }]}>
-                  <ThemedText style={[styles.progressText, { color: progressColor }]}>
-                    {percentage}%
-                  </ThemedText>
+        {stats.total > 0 &&
+          (() => {
+            const percentage =
+              stats.total > 0
+                ? Math.round((stats.completed / stats.total) * 100)
+                : 0;
+            let progressColor = "#FF6B6B"; // Red for low progress
+            if (percentage >= 100) {
+              progressColor = "#4ECDC4"; // Green for 100%
+            } else if (percentage >= 50) {
+              progressColor = "#FFD93D"; // Yellow for 50%+
+            } else if (percentage >= 25) {
+              progressColor = "#FFA07A"; // Orange for 25%+
+            }
+
+            return (
+              <View
+                style={[
+                  styles.statsCard,
+                  {
+                    backgroundColor:
+                      colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8",
+                    borderLeftColor: progressColor
+                  }
+                ]}
+              >
+                <View style={styles.statsContent}>
+                  <View>
+                    <ThemedText type="subtitle" style={styles.statsTitle}>
+                      Today's Progress
+                    </ThemedText>
+                    <ThemedText
+                      style={[styles.statsSubtitle, { color: theme.icon }]}
+                    >
+                      {stats.completed} of {stats.total} prayers completed
+                    </ThemedText>
+                  </View>
+                  <View
+                    style={[
+                      styles.progressCircle,
+                      { borderColor: progressColor }
+                    ]}
+                  >
+                    <ThemedText
+                      style={[styles.progressText, { color: progressColor }]}
+                    >
+                      {percentage}%
+                    </ThemedText>
+                  </View>
                 </View>
               </View>
-            </View>
-          );
-        })()}
+            );
+          })()}
 
         {/* Routine Slots */}
         {config.slots.map((slot) => {
           const slotLabel = TIME_SLOT_LABELS[slot.timeSlot];
           const slotPrayers = slot.prayerIds
-            .map(id => prayersCache.get(id))
+            .map((id) => prayersCache.get(id))
             .filter((p): p is Prayer => p !== undefined);
 
           if (slotPrayers.length === 0) {
@@ -300,21 +343,26 @@ export default function Routine() {
                   <ThemedText type="subtitle" style={styles.slotTitle}>
                     {slotLabel.name}
                   </ThemedText>
-                  <ThemedText style={[styles.slotTitlePunjabi, { color: theme.tint }]}>
+                  <ThemedText
+                    style={[styles.slotTitlePunjabi, { color: theme.tint }]}
+                  >
                     {slotLabel.namePunjabi}
                   </ThemedText>
                   {slot.reminder.enabled && (
-                    <ThemedText style={[styles.reminderText, { color: theme.icon }]}>
-                      <Ionicons name="notifications-outline" size={12} /> Reminder at{' '}
-                      {String(slot.reminder.hour).padStart(2, '0')}:
-                      {String(slot.reminder.minute).padStart(2, '0')}
+                    <ThemedText
+                      style={[styles.reminderText, { color: theme.icon }]}
+                    >
+                      <Ionicons name="notifications-outline" size={12} />{" "}
+                      Reminder at {String(slot.reminder.hour).padStart(2, "0")}:
+                      {String(slot.reminder.minute).padStart(2, "0")}
                     </ThemedText>
                   )}
                 </View>
               </View>
 
               {slotPrayers.map((prayer) => {
-                const isCompleted = completion?.completedPrayers[prayer.id] || false;
+                const isCompleted =
+                  completion?.completedPrayers[prayer.id] || false;
                 return (
                   <TouchableOpacity
                     key={prayer.id}
@@ -322,7 +370,8 @@ export default function Routine() {
                     style={[
                       styles.prayerItem,
                       {
-                        backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f8f8f8',
+                        backgroundColor:
+                          colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8",
                         borderLeftColor: theme.tint,
                         opacity: isCompleted ? 0.6 : 1
                       }
@@ -336,7 +385,7 @@ export default function Routine() {
                       style={styles.checkboxContainer}
                     >
                       <Ionicons
-                        name={isCompleted ? 'checkbox' : 'square-outline'}
+                        name={isCompleted ? "checkbox" : "square-outline"}
                         size={24}
                         color={isCompleted ? theme.tint : theme.icon}
                       />
@@ -351,11 +400,20 @@ export default function Routine() {
                       >
                         {prayer.name}
                       </ThemedText>
-                      <ThemedText style={[styles.prayerNamePunjabi, { color: theme.tint }]}>
+                      <ThemedText
+                        style={[
+                          styles.prayerNamePunjabi,
+                          { color: theme.tint }
+                        ]}
+                      >
                         {prayer.namePunjabi}
                       </ThemedText>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color={theme.icon} />
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={theme.icon}
+                    />
                   </TouchableOpacity>
                 );
               })}
@@ -370,14 +428,24 @@ export default function Routine() {
             <ThemedText type="subtitle" style={styles.emptyRoutineTitle}>
               No Prayers in Routine
             </ThemedText>
-            <ThemedText style={[styles.emptyRoutineText, { color: theme.icon }]}>
+            <ThemedText
+              style={[styles.emptyRoutineText, { color: theme.icon }]}
+            >
               Tap the edit button to add prayers to your routine
             </ThemedText>
             <TouchableOpacity
               onPress={() => setShowEditModal(true)}
-              style={[styles.createButton, { backgroundColor: theme.tint, marginTop: 16 }]}
+              style={[
+                styles.createButton,
+                { backgroundColor: theme.tint, marginTop: 16 }
+              ]}
             >
-              <ThemedText style={{ color: colorScheme === 'dark' ? '#000' : '#fff', fontWeight: '600' }}>
+              <ThemedText
+                style={{
+                  color: colorScheme === "dark" ? "#000" : "#fff",
+                  fontWeight: "600"
+                }}
+              >
                 Add Prayers
               </ThemedText>
             </TouchableOpacity>
@@ -404,7 +472,12 @@ export default function Routine() {
       >
         {selectedPrayer && (
           <ThemedView style={styles.modalContainer}>
-            <View style={[styles.modalHeader, { backgroundColor: theme.background }]}>
+            <View
+              style={[
+                styles.modalHeader,
+                { backgroundColor: theme.background }
+              ]}
+            >
               <TouchableOpacity
                 onPress={() => setSelectedPrayer(null)}
                 style={styles.modalCloseButton}
@@ -424,7 +497,10 @@ export default function Routine() {
               <View style={{ width: 36 }} />
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+            >
               <ThemedText
                 style={[styles.modalDescription, { color: theme.icon }]}
               >
@@ -435,14 +511,17 @@ export default function Routine() {
                 <View key={index} style={styles.prayerLineContainer}>
                   {/* Original text first */}
                   <ThemedText
-                    style={[styles.prayerPunjabiText, { fontFamily: 'serif' }]}
+                    style={[styles.prayerPunjabiText, { fontFamily: "serif" }]}
                   >
                     {line.punjabi}
                   </ThemedText>
                   {/* Transliteration second */}
                   {line.transliteration_english && (
                     <ThemedText
-                      style={[styles.prayerTransliterationText, { color: theme.icon }]}
+                      style={[
+                        styles.prayerTransliterationText,
+                        { color: theme.icon }
+                      ]}
                     >
                       {line.transliteration_english}
                     </ThemedText>
@@ -457,11 +536,11 @@ export default function Routine() {
                     <View
                       style={[
                         styles.prayerSeparator,
-                        { backgroundColor: theme.icon + '20' }
+                        { backgroundColor: theme.icon + "20" }
                       ]}
                     />
                   )}
-    </View>
+                </View>
               ))}
             </ScrollView>
           </ThemedView>
@@ -483,17 +562,17 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     gap: 16
   },
   loadingText: {
     fontSize: 16
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 16
@@ -516,9 +595,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4
   },
   statsContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
   },
   statsTitle: {
     fontSize: 18,
@@ -531,14 +610,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 3,
-    borderColor: 'currentColor'
+    borderColor: "currentColor"
   },
   progressText: {
     fontSize: 16,
-    fontWeight: 'bold'
+    fontWeight: "bold"
   },
   slotSection: {
     marginHorizontal: 20,
@@ -559,8 +638,8 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   prayerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
     borderRadius: 12,
     marginBottom: 8,
@@ -580,12 +659,12 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   completedText: {
-    textDecorationLine: 'line-through'
+    textDecorationLine: "line-through"
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 40,
     gap: 16
   },
@@ -595,7 +674,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    textAlign: 'center'
+    textAlign: "center"
   },
   createButton: {
     paddingHorizontal: 24,
@@ -604,7 +683,7 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   emptyRoutineContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     padding: 40,
     gap: 12
   },
@@ -614,26 +693,26 @@ const styles = StyleSheet.create({
   },
   emptyRoutineText: {
     fontSize: 14,
-    textAlign: 'center'
+    textAlign: "center"
   },
   modalContainer: {
     flex: 1
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0'
+    borderBottomColor: "#e0e0e0"
   },
   modalCloseButton: {
     padding: 4
   },
   modalTitleContainer: {
     flex: 1,
-    alignItems: 'center'
+    alignItems: "center"
   },
   modalTitle: {
     fontSize: 20,
@@ -650,7 +729,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 24,
     lineHeight: 20,
-    fontStyle: 'italic'
+    fontStyle: "italic"
   },
   prayerLineContainer: {
     marginBottom: 20
@@ -659,19 +738,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 32,
     marginBottom: 8,
-    textAlign: 'left'
+    textAlign: "left"
   },
   prayerTransliterationText: {
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 6,
-    fontStyle: 'italic',
+    fontStyle: "italic",
     opacity: 0.8
   },
   prayerEnglishText: {
     fontSize: 14,
     lineHeight: 20,
-    fontStyle: 'italic',
+    fontStyle: "italic",
     marginTop: 4
   },
   prayerSeparator: {

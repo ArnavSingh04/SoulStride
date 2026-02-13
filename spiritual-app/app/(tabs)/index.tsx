@@ -171,6 +171,11 @@ export default function HomeScreen() {
     }).start();
   }, []);
 
+  // Refetch when user/account changes so data is always for the signed-in account
+  useEffect(() => {
+    loadHomeData();
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       loadHomeData();
@@ -209,7 +214,7 @@ export default function HomeScreen() {
 
       const holyBookId = prefs?.selectedHolyBookIds?.[0];
       if (holyBookId) {
-        const userId = await getLessonProgressUserId(user?.id ?? null);
+        const userId = await getLessonProgressUserId();
         const lesson = await getNextLessonForUser(userId, holyBookId);
         setNextLesson(lesson);
       } else {

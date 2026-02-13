@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   StyleSheet,
@@ -9,28 +9,28 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@/contexts/AuthContext';
-import { router } from 'expo-router';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuth } from "@/contexts/AuthContext";
+import { router } from "expo-router";
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const theme = Colors[colorScheme ?? "light"];
   const { signIn } = useAuth();
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
@@ -38,12 +38,18 @@ export default function LoginScreen() {
     try {
       const { error } = await signIn({ email, password });
       if (error) {
-        Alert.alert('Login Failed', error.message || 'Invalid email or password');
+        const isEmailNotConfirmed =
+          error.message?.toLowerCase().includes("email not confirmed") ||
+          error.message?.toLowerCase().includes("confirm your email");
+        const message = isEmailNotConfirmed
+          ? "Your account was created before email confirmation was turned off. Confirm it once in Supabase: SQL Editor → run UPDATE auth.users SET email_confirmed_at = now() WHERE email = 'your@email.com'; (use your email). See SUPABASE_EMAIL_CONFIRMATION.md."
+          : error.message || "Invalid email or password";
+        Alert.alert("Login Failed", message);
       } else {
-        router.replace('/(tabs)');
+        router.replace("/(tabs)");
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert("Error", "An unexpected error occurred");
     } finally {
       setLoading(false);
     }
@@ -52,7 +58,7 @@ export default function LoginScreen() {
   return (
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -80,9 +86,10 @@ export default function LoginScreen() {
                 style={[
                   styles.input,
                   {
-                    backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0',
-                    color: theme.text,
-                  },
+                    backgroundColor:
+                      colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
+                    color: theme.text
+                  }
                 ]}
                 placeholder="Email"
                 placeholderTextColor={theme.icon}
@@ -105,9 +112,10 @@ export default function LoginScreen() {
                 style={[
                   styles.input,
                   {
-                    backgroundColor: colorScheme === 'dark' ? '#2a2a2a' : '#f0f0f0',
-                    color: theme.text,
-                  },
+                    backgroundColor:
+                      colorScheme === "dark" ? "#2a2a2a" : "#f0f0f0",
+                    color: theme.text
+                  }
                 ]}
                 placeholder="Password"
                 placeholderTextColor={theme.icon}
@@ -122,7 +130,7 @@ export default function LoginScreen() {
                 style={styles.eyeIcon}
               >
                 <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
                   size={20}
                   color={theme.icon}
                 />
@@ -132,8 +140,9 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[
                 styles.button,
-                { 
-                  backgroundColor: colorScheme === 'dark' ? '#4a4a4a' : theme.tint 
+                {
+                  backgroundColor:
+                    colorScheme === "dark" ? "#4a4a4a" : theme.tint
                 },
                 loading && styles.buttonDisabled
               ]}
@@ -148,7 +157,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/auth/signup')}
+              onPress={() => router.push("/auth/signup")}
               style={styles.linkButton}
             >
               <ThemedText style={[styles.linkText, { color: theme.tint }]}>
@@ -164,42 +173,42 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: 1
   },
   keyboardView: {
-    flex: 1,
+    flex: 1
   },
   scrollContent: {
     flexGrow: 1,
     padding: 20,
-    justifyContent: 'center',
+    justifyContent: "center"
   },
   header: {
     marginBottom: 40,
-    alignItems: 'center',
+    alignItems: "center"
   },
   title: {
     fontSize: 32,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center"
   },
   subtitle: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center"
   },
   form: {
-    width: '100%',
+    width: "100%"
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
-    position: 'relative',
+    position: "relative"
   },
   inputIcon: {
-    position: 'absolute',
+    position: "absolute",
     left: 16,
-    zIndex: 1,
+    zIndex: 1
   },
   input: {
     flex: 1,
@@ -207,33 +216,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingLeft: 48,
-    fontSize: 16,
+    fontSize: 16
   },
   eyeIcon: {
-    position: 'absolute',
+    position: "absolute",
     right: 16,
-    padding: 4,
+    padding: 4
   },
   button: {
     height: 50,
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.6
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600"
   },
   linkButton: {
     marginTop: 20,
-    alignItems: 'center',
+    alignItems: "center"
   },
   linkText: {
-    fontSize: 14,
-  },
+    fontSize: 14
+  }
 });

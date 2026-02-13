@@ -94,7 +94,7 @@ export default function Journey() {
 
   const handleLessonComplete = useCallback(
     async (lesson: LessonWithBlocks, score?: number) => {
-      const userId = await getLessonProgressUserId(user?.id ?? null);
+      const userId = await getLessonProgressUserId();
       await updateLessonProgress(userId, lesson.id, {
         completed: true,
         completed_at: new Date().toISOString(),

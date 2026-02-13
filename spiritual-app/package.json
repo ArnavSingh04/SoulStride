@@ -22,6 +22,7 @@
     "clear:lessons": "tsx scripts/clear-lessons-data.ts",
     "migrate:lessons-from-json": "tsx scripts/migrate-lessons-from-json.ts",
     "migrate:lessons-from-json:clear": "tsx scripts/migrate-lessons-from-json.ts --clear",
+    "confirm-user-email": "tsx scripts/confirm-user-email.ts",
     "build:android": "eas build --platform android --profile preview",
     "build:ios": "eas build --platform ios --profile preview",
     "build:all": "eas build --platform all --profile preview",

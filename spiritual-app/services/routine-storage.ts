@@ -1,8 +1,9 @@
+import {getStorageUserId} from '@/services/storage-scope';
 import {DailyCompletion, RoutineConfig, RoutineData, TIME_SLOT_LABELS, TimeSlot} from '@/types/routine';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ROUTINE_STORAGE_KEY = '@soulstride:routine';
-const COMPLETION_STORAGE_KEY = '@soulstride:completions';
+const ROUTINE_STORAGE_KEY_PREFIX = '@soulstride:routine:';
+const COMPLETION_STORAGE_KEY_PREFIX = '@soulstride:completions:';
 
 // Get today's date in YYYY-MM-DD format
 export function getTodayDate(): string {
@@ -30,7 +31,9 @@ function getDefaultRoutineConfig(): RoutineConfig {
 // Load routine configuration
 export async function loadRoutineConfig(): Promise<RoutineConfig> {
   try {
-    const data = await AsyncStorage.getItem(ROUTINE_STORAGE_KEY);
+    const userId = await getStorageUserId();
+    const data =
+        await AsyncStorage.getItem(ROUTINE_STORAGE_KEY_PREFIX + userId);
     if (data) {
       const parsed = JSON.parse(data);
       // Ensure all time slots exist
@@ -52,7 +55,9 @@ export async function loadRoutineConfig(): Promise<RoutineConfig> {
 // Save routine configuration
 export async function saveRoutineConfig(config: RoutineConfig): Promise<void> {
   try {
-    await AsyncStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(config));
+    const userId = await getStorageUserId();
+    await AsyncStorage.setItem(
+        ROUTINE_STORAGE_KEY_PREFIX + userId, JSON.stringify(config));
   } catch (error) {
     console.error('Error saving routine config:', error);
     throw error;
@@ -63,7 +68,9 @@ export async function saveRoutineConfig(config: RoutineConfig): Promise<void> {
 export async function loadTodayCompletion(): Promise<DailyCompletion> {
   try {
     const today = getTodayDate();
-    const data = await AsyncStorage.getItem(COMPLETION_STORAGE_KEY);
+    const userId = await getStorageUserId();
+    const data =
+        await AsyncStorage.getItem(COMPLETION_STORAGE_KEY_PREFIX + userId);
     if (data) {
       const completions: DailyCompletion[] = JSON.parse(data);
       const todayCompletion = completions.find(c => c.date === today);
@@ -82,7 +89,9 @@ export async function loadTodayCompletion(): Promise<DailyCompletion> {
 export async function saveTodayCompletion(completion: DailyCompletion):
     Promise<void> {
   try {
-    const data = await AsyncStorage.getItem(COMPLETION_STORAGE_KEY);
+    const userId = await getStorageUserId();
+    const data =
+        await AsyncStorage.getItem(COMPLETION_STORAGE_KEY_PREFIX + userId);
     let completions: DailyCompletion[] = [];
     if (data) {
       completions = JSON.parse(data);
@@ -105,7 +114,7 @@ export async function saveTodayCompletion(completion: DailyCompletion):
       completions = [completion];
     }
     await AsyncStorage.setItem(
-        COMPLETION_STORAGE_KEY, JSON.stringify(completions));
+        COMPLETION_STORAGE_KEY_PREFIX + userId, JSON.stringify(completions));
   } catch (error) {
     console.error('Error saving completion:', error);
     throw error;
@@ -148,7 +157,9 @@ export async function getTodayStats(config: RoutineConfig):
 // Load all recent completions (for streak calculation)
 async function loadAllCompletions(): Promise<DailyCompletion[]> {
   try {
-    const data = await AsyncStorage.getItem(COMPLETION_STORAGE_KEY);
+    const userId = await getStorageUserId();
+    const data =
+        await AsyncStorage.getItem(COMPLETION_STORAGE_KEY_PREFIX + userId);
     if (!data) return [];
     return JSON.parse(data);
   } catch {

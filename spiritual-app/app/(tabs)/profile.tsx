@@ -24,7 +24,10 @@ import { router } from "expo-router";
 import { getAllHolyBooks } from "@/lib/database.service";
 import type { HolyBook } from "@/lib/database.types";
 import { loadUserProfile, resetOnboarding } from "@/services/user-profile";
-import { useThemePreference, type ThemeMode } from "@/contexts/ThemePreferenceContext";
+import {
+  useThemePreference,
+  type ThemeMode
+} from "@/contexts/ThemePreferenceContext";
 
 export default function Settings() {
   const colorScheme = useColorScheme();
@@ -40,7 +43,7 @@ export default function Settings() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [user?.id]);
 
   const loadData = async () => {
     try {
@@ -137,7 +140,11 @@ export default function Settings() {
         {/* Appearance */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="color-palette-outline" size={24} color={theme.tint} />
+            <Ionicons
+              name="color-palette-outline"
+              size={24}
+              color={theme.tint}
+            />
             <ThemedText type="title" style={styles.sectionTitle}>
               Appearance
             </ThemedText>
@@ -148,7 +155,9 @@ export default function Settings() {
               <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
                 Theme
               </ThemedText>
-              <ThemedText style={[styles.settingDescription, { color: theme.icon }]}>
+              <ThemedText
+                style={[styles.settingDescription, { color: theme.icon }]}
+              >
                 Choose light, dark, or follow your device
               </ThemedText>
             </View>
@@ -170,7 +179,12 @@ export default function Settings() {
                     onPress={() => setMode(m)}
                     style={[styles.themeButton, { backgroundColor: bg }]}
                   >
-                    <ThemedText style={{ color: text, fontWeight: selected ? "700" : "500" }}>
+                    <ThemedText
+                      style={{
+                        color: text,
+                        fontWeight: selected ? "700" : "500"
+                      }}
+                    >
                       {m.charAt(0).toUpperCase() + m.slice(1)}
                     </ThemedText>
                   </TouchableOpacity>
@@ -273,7 +287,10 @@ export default function Settings() {
               <TouchableOpacity
                 style={[
                   styles.authButton,
-                  { backgroundColor: colorScheme === "dark" ? "#4a4a4a" : theme.tint }
+                  {
+                    backgroundColor:
+                      colorScheme === "dark" ? "#4a4a4a" : theme.tint
+                  }
                 ]}
                 onPress={() => router.push("/auth/login")}
               >

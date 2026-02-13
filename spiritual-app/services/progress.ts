@@ -1,6 +1,7 @@
+import {getStorageUserId} from '@/services/storage-scope';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const PROGRESS_KEY = '@soulstride:progress';
+const PROGRESS_KEY_PREFIX = '@soulstride:progress:';
 
 export interface UserProgress {
   xp: number;
@@ -31,7 +32,8 @@ function getTodayDate(): string {
 
 export async function loadProgress(): Promise<UserProgress> {
   try {
-    const raw = await AsyncStorage.getItem(PROGRESS_KEY);
+    const userId = await getStorageUserId();
+    const raw = await AsyncStorage.getItem(PROGRESS_KEY_PREFIX + userId);
     if (!raw) return {...DEFAULT};
     const parsed = JSON.parse(raw);
     return {...DEFAULT, ...parsed};
@@ -42,7 +44,8 @@ export async function loadProgress(): Promise<UserProgress> {
 }
 
 export async function saveProgress(progress: UserProgress): Promise<void> {
-  await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify({
+  const userId = await getStorageUserId();
+  await AsyncStorage.setItem(PROGRESS_KEY_PREFIX + userId, JSON.stringify({
     ...progress,
     updatedAt: new Date().toISOString(),
   }));

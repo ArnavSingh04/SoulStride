@@ -1,25 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const LOCAL_USER_ID_KEY = '@soulstride:lesson-progress-user-id';
-
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-      .replace(/x/g, () => (Math.random() * 16 | 0).toString(16))
-      .replace('y', (Math.random() * 4 | 0 + 8).toString(16));
-}
+import {getStorageUserId} from '@/services/storage-scope';
 
 /**
- * Returns a persistent user id for lesson progress.
- * When the user is logged in, use their auth id; otherwise use a device-local
- * UUID stored in AsyncStorage so anonymous users still have progress tracked.
+ * Returns the user id used for lesson progress (DB and any local tracking).
+ * When logged in this is the auth user id; when guest it is a device-local id.
+ * Use this so lesson progress is always scoped to the current account.
  */
-export async function getLessonProgressUserId(authUserId: string|null):
+export async function getLessonProgressUserId(_authUserId?: string|null):
     Promise<string> {
-  if (authUserId) return authUserId;
-  let localId = await AsyncStorage.getItem(LOCAL_USER_ID_KEY);
-  if (!localId) {
-    localId = generateUUID();
-    await AsyncStorage.setItem(LOCAL_USER_ID_KEY, localId);
-  }
-  return localId;
+  return getStorageUserId();
 }
