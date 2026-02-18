@@ -31,6 +31,11 @@ import {
 } from "@/data/prayers";
 import RoutineEditModal from "@/components/routine-edit-modal";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  loadPrayerPreferences,
+  getContentFontSizeScale,
+  type ContentFontSize
+} from "@/services/prayer-preferences";
 
 export default function Routine() {
   const colorScheme = useColorScheme();
@@ -59,6 +64,7 @@ export default function Routine() {
     }
   });
   const [error, setError] = useState<string | null>(null);
+  const [contentFontSize, setContentFontSize] = useState<ContentFontSize>("medium");
 
   useEffect(() => {
     loadData();
@@ -78,6 +84,15 @@ export default function Routine() {
   useEffect(() => {
     loadData();
   }, [user?.id]);
+
+  // Load prayer content font size when opening prayer modal
+  useEffect(() => {
+    if (selectedPrayer) {
+      loadPrayerPreferences().then((prefs) => {
+        setContentFontSize(prefs?.contentFontSize ?? "medium");
+      });
+    }
+  }, [selectedPrayer]);
 
   useEffect(() => {
     // Schedule reminders when config changes
@@ -507,41 +522,75 @@ export default function Routine() {
                 {selectedPrayer.description}
               </ThemedText>
 
-              {selectedPrayer.lines.map((line, index) => (
-                <View key={index} style={styles.prayerLineContainer}>
-                  {/* Original text first */}
-                  <ThemedText
-                    style={[styles.prayerPunjabiText, { fontFamily: "serif" }]}
+              {selectedPrayer.lines.map((line, index) => {
+                const scale = getContentFontSizeScale(contentFontSize);
+                const lineMarginBottom = Math.round(12 * scale);
+                const separatorMarginTop = Math.round(8 * scale);
+                const separatorMarginBottom = Math.round(2 * scale);
+                return (
+                  <View
+                    key={index}
+                    style={[
+                      styles.prayerLineContainer,
+                      { marginBottom: lineMarginBottom }
+                    ]}
                   >
-                    {line.punjabi}
-                  </ThemedText>
-                  {/* Transliteration second */}
-                  {line.transliteration_english && (
+                    {/* Original text first */}
                     <ThemedText
                       style={[
-                        styles.prayerTransliterationText,
-                        { color: theme.icon }
+                        styles.prayerPunjabiText,
+                        {
+                          fontFamily: "serif",
+                          fontSize: 18 * scale,
+                          lineHeight: 32 * scale
+                        }
                       ]}
                     >
-                      {line.transliteration_english}
+                      {line.punjabi}
                     </ThemedText>
-                  )}
-                  {/* Meaning/Translation third (below transliteration) */}
-                  <ThemedText
-                    style={[styles.prayerEnglishText, { color: theme.icon }]}
-                  >
-                    {line.english}
-                  </ThemedText>
-                  {index < selectedPrayer.lines.length - 1 && (
-                    <View
+                    {/* Transliteration second */}
+                    {line.transliteration_english && (
+                      <ThemedText
+                        style={[
+                          styles.prayerTransliterationText,
+                          {
+                            color: theme.icon,
+                            fontSize: 15 * scale,
+                            lineHeight: 20 * scale
+                          }
+                        ]}
+                      >
+                        {line.transliteration_english}
+                      </ThemedText>
+                    )}
+                    {/* Meaning/Translation third (below transliteration) */}
+                    <ThemedText
                       style={[
-                        styles.prayerSeparator,
-                        { backgroundColor: theme.icon + "20" }
+                        styles.prayerEnglishText,
+                        {
+                          color: theme.icon,
+                          fontSize: 14 * scale,
+                          lineHeight: 20 * scale
+                        }
                       ]}
-                    />
-                  )}
-                </View>
-              ))}
+                    >
+                      {line.english}
+                    </ThemedText>
+                    {index < selectedPrayer.lines.length - 1 && (
+                      <View
+                        style={[
+                          styles.prayerSeparator,
+                          {
+                            backgroundColor: theme.icon + "20",
+                            marginTop: separatorMarginTop,
+                            marginBottom: separatorMarginBottom
+                          }
+                        ]}
+                      />
+                    )}
+                  </View>
+                );
+              })}
             </ScrollView>
           </ThemedView>
         )}
@@ -732,18 +781,18 @@ const styles = StyleSheet.create({
     fontStyle: "italic"
   },
   prayerLineContainer: {
-    marginBottom: 20
+    marginBottom: 12
   },
   prayerPunjabiText: {
     fontSize: 18,
     lineHeight: 32,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: "left"
   },
   prayerTransliterationText: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 6,
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 4,
     fontStyle: "italic",
     opacity: 0.8
   },
@@ -751,11 +800,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontStyle: "italic",
-    marginTop: 4
+    marginTop: 2
   },
   prayerSeparator: {
     height: 1,
-    marginTop: 16,
-    marginBottom: 4
+    marginTop: 8,
+    marginBottom: 2
   }
 });

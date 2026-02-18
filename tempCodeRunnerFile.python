@@ -1,0 +1,43 @@
+from bs4 import BeautifulSoup
+import json
+
+# Load HTML file
+with open(r"C:\Users\arnav\Downloads\Read Baani - GurbaniNow Search.html", "r", encoding="utf-8") as f:
+    soup = BeautifulSoup(f, "html.parser")
+
+# Extract title
+title_punjabi = soup.find(id="shabadInfoPunjabi")
+title_english = soup.find(id="shabadInfoEnglish")
+
+result = {
+    "title": {
+        "punjabi": title_punjabi.get_text(strip=True) if title_punjabi else "",
+        "english": title_english.get_text(strip=True) if title_english else ""
+    },
+    "lines": []
+}
+
+# Extract all shabad lines
+shabad_lines = soup.find_all("div", class_="shabadLine")
+
+for idx, line in enumerate(shabad_lines, start=1):
+
+    punjabi = line.find("div", class_="gurmukhi unicode normal")
+    hindi = line.find("div", class_="hindi")
+    english = line.find("div", class_="english")
+    transliteration = line.find("div", class_="transliteration")
+
+    result["lines"].append({
+        "line_number": idx,
+        "punjabi_text": punjabi.get_text(strip=True) if punjabi else "",
+        "hindi_text": hindi.get_text(strip=True) if hindi else "",
+        "english_text": english.get_text(strip=True) if english else "",
+        "english_transliteration": transliteration.get_text(strip=True) if transliteration else "",
+        "hindi_transliteration": None  # Not present in source HTML
+    })
+
+# Save to JSON
+with open("jaap_sahib.json", "w", encoding="utf-8") as f:
+    json.dump(result, f, ensure_ascii=False, indent=2)
+
+print("JSON created successfully.")

@@ -5,6 +5,7 @@ const PRAYER_PREFERENCES_KEY_PREFIX = '@soulstride:prayer-preferences:';
 
 export type PrayerLanguage = 'punjabi'|'english'|'hindi';
 export type ContentType = 'original'|'translation'|'transliteration';
+export type ContentFontSize = 'small'|'medium'|'large';
 
 export interface PrayerPreferences {
   primaryLanguage: PrayerLanguage;
@@ -13,16 +14,18 @@ export interface PrayerPreferences {
   showTransliteration: boolean;
   translationLanguage?: 'english'|'hindi';
   selectedHolyBookIds: string[];  // required in-app; default []
+  contentFontSize?: ContentFontSize;  // only for prayers/holy book content
 }
 
 function getDefaultPreferences(): PrayerPreferences {
   return {
     primaryLanguage: 'punjabi',
     showOriginal: true,
-    showTranslation: true,
-    showTransliteration: true,
+    showTranslation: false,
+    showTransliteration: false,
     translationLanguage: 'english',
     selectedHolyBookIds: [],
+    contentFontSize: 'medium',
   };
 }
 
@@ -56,6 +59,15 @@ export async function savePrayerPreferences(preferences: PrayerPreferences):
   } catch (error) {
     console.error('Error saving prayer preferences:', error);
     throw error;
+  }
+}
+
+/** Scale factor for prayer/holy book content text (only used on Prayers page). */
+export function getContentFontSizeScale(size: ContentFontSize | undefined): number {
+  switch (size) {
+    case 'small': return 0.9;
+    case 'large': return 1.15;
+    default: return 1;
   }
 }
 

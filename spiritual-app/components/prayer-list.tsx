@@ -23,17 +23,21 @@ import {
 import type { PrayerWithLines } from "@/lib/database.types";
 import {
   loadPrayerPreferences,
-  type PrayerPreferences
+  getContentFontSizeScale,
+  type PrayerPreferences,
+  type ContentFontSize
 } from "@/services/prayer-preferences";
 
 interface PrayerListProps {
   onPrayerSelect?: (prayer: PrayerWithLines) => void;
   selectedHolyBookIds?: string[];
+  contentFontSize?: ContentFontSize;
 }
 
 export default function PrayerList({
   onPrayerSelect,
-  selectedHolyBookIds
+  selectedHolyBookIds,
+  contentFontSize
 }: PrayerListProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
@@ -373,8 +377,18 @@ export default function PrayerList({
                     (primaryLanguage === "hindi" &&
                       translationLanguage === "english"));
 
+                const scale = getContentFontSizeScale(
+                  contentFontSize ?? preferences?.contentFontSize ?? "medium"
+                );
+                const lineContainerMargin = Math.round(12 * scale);
+                const separatorMarginTop = Math.round(8 * scale);
+                const separatorMarginBottom = Math.round(2 * scale);
+
                 return (
-                  <View key={index} style={styles.prayerLineContainer}>
+                  <View
+                    key={index}
+                    style={[styles.prayerLineContainer, { marginBottom: lineContainerMargin }]}
+                  >
                     {/* Original Punjabi text (always first) */}
                     {shouldShowOriginalPunjabi && (
                       <ThemedText
@@ -383,7 +397,9 @@ export default function PrayerList({
                           {
                             fontFamily: "serif",
                             opacity: primaryLanguage === "punjabi" ? 1 : 0.7,
-                            marginTop: primaryLanguage === "punjabi" ? 0 : 4
+                            marginTop: primaryLanguage === "punjabi" ? 0 : 4,
+                            fontSize: 18 * scale,
+                            lineHeight: 32 * scale
                           }
                         ]}
                       >
@@ -396,7 +412,11 @@ export default function PrayerList({
                       <ThemedText
                         style={[
                           styles.prayerTransliterationText,
-                          { color: theme.icon }
+                          {
+                            color: theme.icon,
+                            fontSize: 15 * scale,
+                            lineHeight: 20 * scale
+                          }
                         ]}
                       >
                         {transliterationText}
@@ -410,7 +430,11 @@ export default function PrayerList({
                         <ThemedText
                           style={[
                             styles.prayerPrimaryText,
-                            { fontFamily: undefined }
+                            {
+                              fontFamily: undefined,
+                              fontSize: 16 * scale,
+                              lineHeight: 24 * scale
+                            }
                           ]}
                         >
                           {primaryText}
@@ -422,7 +446,11 @@ export default function PrayerList({
                       <ThemedText
                         style={[
                           styles.prayerEnglishText,
-                          { color: theme.icon }
+                          {
+                            color: theme.icon,
+                            fontSize: 14 * scale,
+                            lineHeight: 20 * scale
+                          }
                         ]}
                       >
                         {translationText}
@@ -433,7 +461,11 @@ export default function PrayerList({
                       <View
                         style={[
                           styles.prayerSeparator,
-                          { backgroundColor: theme.icon + "20" }
+                          {
+                            backgroundColor: theme.icon + "20",
+                            marginTop: separatorMarginTop,
+                            marginBottom: separatorMarginBottom
+                          }
                         ]}
                       />
                     )}
@@ -556,18 +588,18 @@ const styles = StyleSheet.create({
     fontStyle: "italic"
   },
   prayerLineContainer: {
-    marginBottom: 20
+    marginBottom: 12
   },
   prayerPunjabiText: {
     fontSize: 18,
     lineHeight: 32,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: "left"
   },
   prayerTransliterationText: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 6,
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 4,
     fontStyle: "italic",
     opacity: 0.8
   },
@@ -575,17 +607,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontStyle: "italic",
-    marginTop: 4
+    marginTop: 2
   },
   prayerPrimaryText: {
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: "left"
   },
   prayerSeparator: {
     height: 1,
-    marginTop: 16,
-    marginBottom: 4
+    marginTop: 8,
+    marginBottom: 2
   }
 });

@@ -12,6 +12,7 @@
     "migrate:all": "tsx scripts/migrate-all.ts",
     "migrate:prayers": "tsx scripts/migrate-prayers.ts",
     "migrate:prayers:json": "tsx scripts/migrate-prayers-json.ts",
+    "migrate:jaap-sahib": "tsx scripts/migrate-jaap-sahib-from-json.ts",
     "migrate:ggs": "tsx scripts/migrate-ggs.ts",
     "migrate:ggs-lessons": "tsx scripts/migrate-ggs-lessons.ts",
     "migrate:ggs-lessons-by-pauri": "tsx scripts/migrate-ggs-lessons-by-pauri.ts",

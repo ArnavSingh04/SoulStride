@@ -15,7 +15,11 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import GuruGranthSahibReader from "@/components/guru-granth-sahib-reader";
 import PrayerList from "@/components/prayer-list";
-import { loadPrayerPreferences } from "@/services/prayer-preferences";
+import {
+  loadPrayerPreferences,
+  savePrayerPreferences,
+  type ContentFontSize
+} from "@/services/prayer-preferences";
 import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -26,6 +30,7 @@ export default function Prayers() {
   const theme = Colors[colorScheme ?? "light"];
   const [showGuruGranthSahib, setShowGuruGranthSahib] = useState(false);
   const [selectedHolyBookIds, setSelectedHolyBookIds] = useState<string[]>([]);
+  const [contentFontSize, setContentFontSize] = useState<ContentFontSize>("medium");
 
   useEffect(() => {
     loadPreferences();
@@ -41,8 +46,19 @@ export default function Prayers() {
     try {
       const prefs = await loadPrayerPreferences();
       setSelectedHolyBookIds(prefs?.selectedHolyBookIds || []);
+      setContentFontSize(prefs?.contentFontSize ?? "medium");
     } catch (error) {
       console.error("Error loading preferences:", error);
+    }
+  };
+
+  const handleContentFontSizeChange = async (size: ContentFontSize) => {
+    setContentFontSize(size);
+    try {
+      const prefs = await loadPrayerPreferences();
+      await savePrayerPreferences({ ...prefs, contentFontSize: size });
+    } catch (error) {
+      console.error("Error saving font size preference:", error);
     }
   };
 
@@ -64,6 +80,41 @@ export default function Prayers() {
           <ThemedText style={[styles.headerSubtitle, { color: theme.icon }]}>
             Read sacred texts and prayers
           </ThemedText>
+          {hasHolyBookSelection && (
+            <View style={styles.fontSizeRow}>
+              <ThemedText style={[styles.fontSizeLabel, { color: theme.icon }]}>
+                Text size:
+              </ThemedText>
+              {(["small", "medium", "large"] as const).map((size) => (
+                <TouchableOpacity
+                  key={size}
+                  onPress={() => handleContentFontSizeChange(size)}
+                  style={[
+                    styles.fontSizeButton,
+                    {
+                      backgroundColor:
+                        contentFontSize === size
+                          ? theme.tint
+                          : colorScheme === "dark"
+                            ? "#3a3a3a"
+                            : "#e8e8e8"
+                    }
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.fontSizeButtonText,
+                      {
+                        color: contentFontSize === size ? "#fff" : theme.text
+                      }
+                    ]}
+                  >
+                    {size.charAt(0).toUpperCase() + size.slice(1)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* If no holy book selected, prompt user */}
@@ -142,7 +193,10 @@ export default function Prayers() {
 
         {/* Prayer List */}
         <View style={styles.prayerListContainer}>
-          <PrayerList selectedHolyBookIds={selectedHolyBookIds} />
+          <PrayerList
+            selectedHolyBookIds={selectedHolyBookIds}
+            contentFontSize={contentFontSize}
+          />
         </View>
           </>
         )}
@@ -152,6 +206,7 @@ export default function Prayers() {
       <GuruGranthSahibReader
         visible={showGuruGranthSahib}
         onClose={() => setShowGuruGranthSahib(false)}
+        contentFontSize={contentFontSize}
       />
     </ThemedView>
   );
@@ -178,6 +233,25 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 16
+  },
+  fontSizeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 14,
+    gap: 8
+  },
+  fontSizeLabel: {
+    fontSize: 14,
+    marginRight: 4
+  },
+  fontSizeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  fontSizeButtonText: {
+    fontSize: 13,
+    fontWeight: "600"
   },
   guruGranthSahibCard: {
     marginHorizontal: 20,

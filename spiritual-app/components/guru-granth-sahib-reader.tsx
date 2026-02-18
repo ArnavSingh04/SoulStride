@@ -20,15 +20,18 @@ import {
   getTotalPages,
 } from '@/lib/database.service';
 import type { PageWithLines, BaniLine } from '@/lib/database.types';
+import { getContentFontSizeScale, type ContentFontSize } from '@/services/prayer-preferences';
 
 interface GuruGranthSahibReaderProps {
   visible: boolean;
   onClose: () => void;
+  contentFontSize?: ContentFontSize;
 }
 
 export default function GuruGranthSahibReader({
   visible,
-  onClose
+  onClose,
+  contentFontSize = 'medium'
 }: GuruGranthSahibReaderProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
@@ -284,33 +287,72 @@ export default function GuruGranthSahibReader({
               <ThemedText type="subtitle" style={styles.pageNumber}>
                 Page {page.pageNumber}
               </ThemedText>
-              {page.lines.map((line, index) => (
-                <View key={line.id || index} style={styles.lineContainer}>
-                  {/* Original text first */}
-                  <ThemedText style={[styles.punjabiText, { fontFamily: 'serif' }]}>
-                    {line.punjabi}
-                  </ThemedText>
-                  {/* Transliteration second */}
-                  {line.transliteration_english && (
-                    <ThemedText
-                      style={[styles.transliterationText, { color: theme.icon }]}
-                    >
-                      {line.transliteration_english}
-                    </ThemedText>
-                  )}
-                  {/* Translation/Meaning third (below transliteration) */}
-                  <ThemedText
-                    style={[styles.englishText, { color: theme.icon }]}
+              {page.lines.map((line, index) => {
+                const scale = getContentFontSizeScale(contentFontSize);
+                const lineMarginBottom = Math.round(12 * scale);
+                const separatorMarginTop = Math.round(8 * scale);
+                const separatorMarginBottom = Math.round(2 * scale);
+                return (
+                  <View
+                    key={line.id || index}
+                    style={[styles.lineContainer, { marginBottom: lineMarginBottom }]}
                   >
-                    {line.english}
-                  </ThemedText>
-                  {index < page.lines.length - 1 && (
-                    <View
-                      style={[styles.separator, { backgroundColor: theme.icon + '20' }]}
-                    />
-                  )}
-                </View>
-              ))}
+                    {/* Original text first */}
+                    <ThemedText
+                      style={[
+                        styles.punjabiText,
+                        {
+                          fontFamily: 'serif',
+                          fontSize: 18 * scale,
+                          lineHeight: 32 * scale
+                        }
+                      ]}
+                    >
+                      {line.punjabi}
+                    </ThemedText>
+                    {/* Transliteration second */}
+                    {line.transliteration_english && (
+                      <ThemedText
+                        style={[
+                          styles.transliterationText,
+                          {
+                            color: theme.icon,
+                            fontSize: 14 * scale,
+                            lineHeight: 20 * scale
+                          }
+                        ]}
+                      >
+                        {line.transliteration_english}
+                      </ThemedText>
+                    )}
+                    {/* Translation/Meaning third (below transliteration) */}
+                    <ThemedText
+                      style={[
+                        styles.englishText,
+                        {
+                          color: theme.icon,
+                          fontSize: 14 * scale,
+                          lineHeight: 20 * scale
+                        }
+                      ]}
+                    >
+                      {line.english}
+                    </ThemedText>
+                    {index < page.lines.length - 1 && (
+                      <View
+                        style={[
+                          styles.separator,
+                          {
+                            backgroundColor: theme.icon + '20',
+                            marginTop: separatorMarginTop,
+                            marginBottom: separatorMarginBottom
+                          }
+                        ]}
+                      />
+                    )}
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <View style={styles.loadingContainer}>
@@ -472,8 +514,8 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   transliterationText: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     fontStyle: 'italic',
     marginTop: 4,
     opacity: 0.7
@@ -526,24 +568,24 @@ const styles = StyleSheet.create({
     marginBottom: 24
   },
   lineContainer: {
-    marginBottom: 20
+    marginBottom: 12
   },
   punjabiText: {
     fontSize: 18,
     lineHeight: 32,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'left'
   },
   englishText: {
     fontSize: 14,
     lineHeight: 20,
     fontStyle: 'italic',
-    marginTop: 4
+    marginTop: 2
   },
   separator: {
     height: 1,
-    marginTop: 16,
-    marginBottom: 4
+    marginTop: 8,
+    marginBottom: 2
   },
   modalOverlay: {
     flex: 1,
