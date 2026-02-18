@@ -17,7 +17,8 @@ import {
   loadPrayerPreferences,
   savePrayerPreferences,
   type PrayerPreferences,
-  type PrayerLanguage
+  type PrayerLanguage,
+  type ContentFontSize
 } from "@/services/prayer-preferences";
 import { useAuth } from "@/contexts/AuthContext";
 import { router } from "expo-router";
@@ -626,6 +627,74 @@ export default function Settings() {
                   preferences.showTransliteration ? theme.tint : "#f4f3f4"
                 }
               />
+            </View>
+          </View>
+
+          {/* Text size for prayer / holy book content */}
+          <View
+            style={[
+              styles.settingCard,
+              {
+                backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
+              }
+            ]}
+          >
+            <View style={styles.settingHeader}>
+              <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
+                Text Size
+              </ThemedText>
+              <ThemedText
+                style={[styles.settingDescription, { color: theme.icon }]}
+              >
+                Size of prayer and holy book content
+              </ThemedText>
+            </View>
+            <View style={styles.languageButtons}>
+              {(["small", "medium", "large"] as ContentFontSize[]).map(
+                (size) => {
+                  const isSelected =
+                    (preferences.contentFontSize ?? "medium") === size;
+                  const selectedBgColor =
+                    colorScheme === "dark" ? "#4a4a4a" : theme.tint;
+                  const textColor = isSelected ? "#fff" : theme.text;
+
+                  return (
+                    <TouchableOpacity
+                      key={size}
+                      onPress={() =>
+                        handlePreferenceChange("contentFontSize", size)
+                      }
+                      style={[
+                        styles.languageButton,
+                        {
+                          backgroundColor: isSelected
+                            ? selectedBgColor
+                            : colorScheme === "dark"
+                              ? "#2a2a2a"
+                              : "#f0f0f0",
+                          borderColor: isSelected
+                            ? colorScheme === "dark"
+                              ? "#4a4a4a"
+                              : theme.tint
+                            : "transparent"
+                        }
+                      ]}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.languageButtonText,
+                          {
+                            color: textColor,
+                            fontWeight: isSelected ? "600" : "400"
+                          }
+                        ]}
+                      >
+                        {size.charAt(0).toUpperCase() + size.slice(1)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                }
+              )}
             </View>
           </View>
         </View>
