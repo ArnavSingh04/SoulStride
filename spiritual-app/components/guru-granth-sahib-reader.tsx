@@ -20,7 +20,12 @@ import {
   getTotalPages,
 } from '@/lib/database.service';
 import type { PageWithLines, BaniLine } from '@/lib/database.types';
-import { getContentFontSizeScale, type ContentFontSize } from '@/services/prayer-preferences';
+import {
+  loadPrayerPreferences,
+  getContentFontSizeScale,
+  type ContentFontSize,
+  type PrayerPreferences
+} from '@/services/prayer-preferences';
 
 interface GuruGranthSahibReaderProps {
   visible: boolean;
@@ -46,10 +51,17 @@ export default function GuruGranthSahibReader({
   const [page, setPage] = useState<PageWithLines | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [preferences, setPreferences] = useState<PrayerPreferences | null>(null);
 
   useEffect(() => {
     loadTotalPages();
   }, []);
+
+  useEffect(() => {
+    if (visible) {
+      loadPrayerPreferences().then(setPreferences);
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -172,7 +184,7 @@ export default function GuruGranthSahibReader({
                   color: theme.text
                 }
               ]}
-              placeholder="Search in Guru Granth Sahib..."
+              placeholder="Search in Guru Granth Sahib Ji..."
               placeholderTextColor={theme.icon}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -292,29 +304,60 @@ export default function GuruGranthSahibReader({
                 const lineMarginBottom = Math.round(12 * scale);
                 const separatorMarginTop = Math.round(8 * scale);
                 const separatorMarginBottom = Math.round(2 * scale);
+                const showOriginal = preferences?.showOriginal ?? true;
+                const showTranslation = preferences?.showTranslation ?? false;
+                const defaultLanguage = preferences?.primaryLanguage ?? 'punjabi';
+                // Meaning/translation is stored in English (same as prayer-list)
+                const translationText = line.english;
+                // When show original is on and default is not Punjabi: show text in that language (Hindi transliteration or Hindi script, else English transliteration) — same as prayer-list
+                const transliterationText =
+                  defaultLanguage === 'hindi'
+                    ? (line.transliteration_hindi || line.hindi || line.transliteration_english)
+                    : line.transliteration_english;
+                const showPunjabiAsOriginal =
+                  showOriginal && !!line.punjabi && defaultLanguage === 'punjabi';
+                const showTransliterationAsOriginal =
+                  showOriginal && defaultLanguage !== 'punjabi' && !!transliterationText;
                 return (
                   <View
                     key={line.id || index}
                     style={[styles.lineContainer, { marginBottom: lineMarginBottom }]}
                   >
-                    {/* Original text first */}
-                    <ThemedText
-                      style={[
-                        styles.punjabiText,
-                        {
-                          fontFamily: 'serif',
-                          fontSize: 18 * scale,
-                          lineHeight: 32 * scale
-                        }
-                      ]}
-                    >
-                      {line.punjabi}
-                    </ThemedText>
-                    {/* Transliteration second */}
-                    {line.transliteration_english && (
+                    {/* Original: Punjabi (Gurmukhi) when default is Punjabi, or transliteration as original when default is not Punjabi */}
+                    {showPunjabiAsOriginal && (
                       <ThemedText
                         style={[
-                          styles.transliterationText,
+                          styles.punjabiText,
+                          {
+                            fontFamily: 'serif',
+                            fontSize: 18 * scale,
+                            lineHeight: 32 * scale
+                          }
+                        ]}
+                      >
+                        {line.punjabi}
+                      </ThemedText>
+                    )}
+                    {showTransliterationAsOriginal && (
+                      <ThemedText
+                        style={[
+                          styles.punjabiText,
+                          {
+                            fontFamily: undefined,
+                            fontSize: 18 * scale,
+                            lineHeight: 28 * scale,
+                            color: theme.text
+                          }
+                        ]}
+                      >
+                        {transliterationText}
+                      </ThemedText>
+                    )}
+                    {/* Translation (English meaning) - when "Show translation" is on */}
+                    {showTranslation && translationText && (
+                      <ThemedText
+                        style={[
+                          styles.englishText,
                           {
                             color: theme.icon,
                             fontSize: 14 * scale,
@@ -322,22 +365,9 @@ export default function GuruGranthSahibReader({
                           }
                         ]}
                       >
-                        {line.transliteration_english}
+                        {translationText}
                       </ThemedText>
                     )}
-                    {/* Translation/Meaning third (below transliteration) */}
-                    <ThemedText
-                      style={[
-                        styles.englishText,
-                        {
-                          color: theme.icon,
-                          fontSize: 14 * scale,
-                          lineHeight: 20 * scale
-                        }
-                      ]}
-                    >
-                      {line.english}
-                    </ThemedText>
                     {index < page.lines.length - 1 && (
                       <View
                         style={[

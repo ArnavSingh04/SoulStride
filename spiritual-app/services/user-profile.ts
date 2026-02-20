@@ -58,11 +58,11 @@ export async function updateUserProfile(patch: Partial<UserProfile>):
   return updated;
 }
 
-export async function isOnboardingComplete(): Promise<boolean> {
+/** If userId is provided (e.g. after sign-up), check for that user; otherwise use current storage user. */
+export async function isOnboardingComplete(userId?: string): Promise<boolean> {
   try {
-    const userId = await getStorageUserId();
-    const v =
-        await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY_PREFIX + userId);
+    const id = userId ?? (await getStorageUserId());
+    const v = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY_PREFIX + id);
     return v === 'true';
   } catch {
     return false;

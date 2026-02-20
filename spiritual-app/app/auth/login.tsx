@@ -16,6 +16,7 @@ import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/contexts/AuthContext";
+import { getSession } from "@/services/auth.service";
 import { isOnboardingComplete } from "@/services/user-profile";
 import { router } from "expo-router";
 
@@ -47,7 +48,8 @@ export default function LoginScreen() {
           : error.message || "Invalid email or password";
         Alert.alert("Login Failed", message);
       } else {
-        const completed = await isOnboardingComplete();
+        const session = await getSession();
+        const completed = await isOnboardingComplete(session?.user?.id);
         router.replace(completed ? "/(tabs)" : "/onboarding");
       }
     } catch (error) {

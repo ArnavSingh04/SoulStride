@@ -263,10 +263,10 @@ export default function Guide() {
               </ThemedText>
 
               {[
-                "Should I eat non-vegetarian food?",
-                "How do I find inner peace?",
-                "What does my current situation mean?",
-                "How can I improve my daily practice?"
+                "How can I remember the Divine Name in my daily routine?",
+                "What does it mean to walk in the way of Hukam?",
+                "How can I deal with anxiety and find peace through Gurbani?",
+                "What is the role of seva (selfless service) in spiritual growth?"
               ].map((suggestion, index) => (
                 <TouchableOpacity
                   key={index}

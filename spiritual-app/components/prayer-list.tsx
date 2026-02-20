@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   FlatList,
   ActivityIndicator
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
@@ -54,6 +55,12 @@ export default function PrayerList({
   useEffect(() => {
     loadPreferences();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPreferences();
+    }, [])
+  );
 
   // Reload prayers when preferences change (especially holy book selection)
   useEffect(() => {
@@ -313,69 +320,26 @@ export default function PrayerList({
               </ThemedText>
 
               {selectedPrayer.lines.map((line, index) => {
-                // Determine what to display based on preferences
                 const showOriginal = preferences?.showOriginal ?? true;
-                const showTranslation = preferences?.showTranslation ?? true;
-                const showTransliteration =
-                  preferences?.showTransliteration ?? true;
-                const primaryLanguage =
+                const showTranslation = preferences?.showTranslation ?? false;
+                const defaultLanguage =
                   preferences?.primaryLanguage ?? "punjabi";
-                const translationLanguage =
-                  preferences?.translationLanguage ?? "english";
 
-                // Get the primary text based on selected language
-                const getPrimaryText = () => {
-                  if (primaryLanguage === "punjabi") return line.punjabi;
-                  if (primaryLanguage === "english") return line.english;
-                  if (primaryLanguage === "hindi")
-                    return line.hindi || line.english;
-                  return line.punjabi;
-                };
-
-                // Get translation text
-                const getTranslationText = () => {
-                  if (translationLanguage === "english") return line.english;
-                  if (translationLanguage === "hindi")
-                    return line.hindi || line.english;
-                  return line.english;
-                };
-
-                // Get transliteration text
-                const getTransliterationText = () => {
-                  if (translationLanguage === "english")
-                    return line.transliteration_english;
-                  if (translationLanguage === "hindi")
-                    return (
-                      line.transliteration_hindi || line.transliteration_english
-                    );
-                  return line.transliteration_english;
-                };
-
-                const primaryText = getPrimaryText();
-                const translationText = getTranslationText();
-                const transliterationText = getTransliterationText();
-
-                // Determine if we should show original Punjabi text
-                // This toggle controls whether to show the original Punjabi text
-                const shouldShowOriginalPunjabi = showOriginal && line.punjabi;
-
-                // Determine if we should show primary text
-                // If primary is punjabi, showOriginal controls whether to show it (since it's the original)
-                // If primary is not punjabi, always show the primary text
-                const shouldShowPrimary =
-                  primaryLanguage === "punjabi"
-                    ? showOriginal // If primary is punjabi, showOriginal controls it
-                    : true; // If primary is not punjabi, always show it
-
-                // Determine if we should show translation
+                // Meaning/translation is stored in English; always use it for the translation block
+                const translationText = line.english;
                 const shouldShowTranslation =
-                  showTranslation &&
-                  translationText &&
-                  (primaryLanguage === "punjabi" ||
-                    (primaryLanguage === "english" &&
-                      translationLanguage === "hindi") ||
-                    (primaryLanguage === "hindi" &&
-                      translationLanguage === "english"));
+                  showTranslation && !!translationText;
+                // When show original is on and default is not Punjabi: show text in that language (Hindi transliteration or Hindi script, else English transliteration)
+                const transliterationText =
+                  defaultLanguage === "hindi"
+                    ? (line.transliteration_hindi || line.hindi || line.transliteration_english)
+                    : line.transliteration_english;
+                const showPunjabiAsOriginal =
+                  showOriginal && !!line.punjabi && defaultLanguage === "punjabi";
+                const showTransliterationAsOriginal =
+                  showOriginal &&
+                  defaultLanguage !== "punjabi" &&
+                  !!transliterationText;
 
                 const scale = getContentFontSizeScale(
                   contentFontSize ?? preferences?.contentFontSize ?? "medium"
@@ -389,15 +353,13 @@ export default function PrayerList({
                     key={index}
                     style={[styles.prayerLineContainer, { marginBottom: lineContainerMargin }]}
                   >
-                    {/* Original Punjabi text (always first) */}
-                    {shouldShowOriginalPunjabi && (
+                    {/* Original: Punjabi (Gurmukhi) when default is Punjabi, or transliteration as original when default is not Punjabi */}
+                    {showPunjabiAsOriginal && (
                       <ThemedText
                         style={[
                           styles.prayerPunjabiText,
                           {
                             fontFamily: "serif",
-                            opacity: primaryLanguage === "punjabi" ? 1 : 0.7,
-                            marginTop: primaryLanguage === "punjabi" ? 0 : 4,
                             fontSize: 18 * scale,
                             lineHeight: 32 * scale
                           }
@@ -406,16 +368,15 @@ export default function PrayerList({
                         {line.punjabi}
                       </ThemedText>
                     )}
-
-                    {/* Transliteration (second) */}
-                    {showTransliteration && transliterationText && (
+                    {showTransliterationAsOriginal && (
                       <ThemedText
                         style={[
-                          styles.prayerTransliterationText,
+                          styles.prayerPunjabiText,
                           {
-                            color: theme.icon,
-                            fontSize: 15 * scale,
-                            lineHeight: 20 * scale
+                            fontFamily: undefined,
+                            fontSize: 18 * scale,
+                            lineHeight: 28 * scale,
+                            color: theme.text
                           }
                         ]}
                       >
@@ -423,25 +384,7 @@ export default function PrayerList({
                       </ThemedText>
                     )}
 
-                    {/* Primary language text (only if not punjabi) - shown after transliteration */}
-                    {shouldShowPrimary &&
-                      primaryText &&
-                      primaryLanguage !== "punjabi" && (
-                        <ThemedText
-                          style={[
-                            styles.prayerPrimaryText,
-                            {
-                              fontFamily: undefined,
-                              fontSize: 16 * scale,
-                              lineHeight: 24 * scale
-                            }
-                          ]}
-                        >
-                          {primaryText}
-                        </ThemedText>
-                      )}
-
-                    {/* Translation/Meaning (always last, at the bottom) */}
+                    {/* Translation in default language (with fallback) - when "Show translation" is on */}
                     {shouldShowTranslation && (
                       <ThemedText
                         style={[

@@ -17,7 +17,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (data: SignInData) => Promise<{ error: any }>;
-  signUp: (data: SignUpData) => Promise<{ error: any }>;
+  signUp: (data: SignUpData) => Promise<{ user: AuthUser | null; error: any }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -60,9 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (data: SignUpData) => {
     const { user: authUser, error } = await authSignUp(data);
     if (!error && authUser) {
-      setUser(userToAuthUser(authUser));
+      const authUserTyped = userToAuthUser(authUser);
+      setUser(authUserTyped);
+      return { user: authUserTyped, error: null };
     }
-    return { error };
+    return { user: null, error };
   };
 
   const signOut = async () => {

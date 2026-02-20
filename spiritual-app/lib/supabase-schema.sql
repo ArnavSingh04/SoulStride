@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Table: holy_books
--- Stores information about different holy books (e.g., Guru Granth Sahib, etc.)
+-- Stores information about different holy books (e.g., Guru Granth Sahib Ji, etc.)
 CREATE TABLE IF NOT EXISTS holy_books (
   id VARCHAR(100) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,

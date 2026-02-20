@@ -121,6 +121,36 @@ export async function updateUserProfile(updates: {
   }
 }
 
+export interface OnboardingData {
+  name: string;
+  dailyMinutes: number;
+  comfortLanguage: string;
+  selectedHolyBookIds: string[];
+}
+
+// Save onboarding answers to user metadata (when signed in) for sync across devices
+export async function saveOnboardingToUser(data: OnboardingData): Promise<{ error: AuthError | null }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: null };
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        ...user.user_metadata,
+        name: data.name,
+        onboarding: {
+          name: data.name,
+          dailyMinutes: data.dailyMinutes,
+          comfortLanguage: data.comfortLanguage,
+          selectedHolyBookIds: data.selectedHolyBookIds,
+        },
+      },
+    });
+    return { error };
+  } catch (error) {
+    return { error: error as AuthError };
+  }
+}
+
 // Reset password
 export async function resetPassword(email: string): Promise<{ error: AuthError | null }> {
   try {

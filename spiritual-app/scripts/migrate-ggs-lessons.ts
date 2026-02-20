@@ -287,7 +287,7 @@ function generateLessonMetadata(pageGroup: PageGroup, lessonIndex: number): {
  * Main migration function
  */
 async function migrateGGSLessons() {
-  console.log('🚀 Starting Guru Granth Sahib lessons migration...\n');
+  console.log('🚀 Starting Guru Granth Sahib Ji lessons migration...\n');
   
   try {
     // Get total pages
@@ -349,7 +349,7 @@ async function migrateGGSLessons() {
         const lesson: Lesson = {
           id: lessonId,
           holy_book_id: 'guru-granth-sahib',
-          section: pageGroup.section || 'Guru Granth Sahib',
+          section: pageGroup.section || 'Guru Granth Sahib Ji',
           lesson_type: lessonType,
           difficulty: pageGroup.importance === 'high' ? 1 : Math.min(5, Math.floor(pageGroup.startPage / 100) + 1),
           estimated_time_min: pageGroup.importance === 'high' ? 8 : 5,
@@ -399,7 +399,7 @@ async function migrateGGSLessons() {
       }
     }
     
-    console.log('\n🎉 Guru Granth Sahib lessons migration complete!');
+    console.log('\n🎉 Guru Granth Sahib Ji lessons migration complete!');
     console.log(`✅ Created: ${created} lessons`);
     console.log(`⚠️  Skipped: ${skipped} lessons (already exist or no content)`);
     console.log(`❌ Errors: ${errors} lessons`);

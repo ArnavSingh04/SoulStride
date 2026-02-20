@@ -80,7 +80,7 @@ const prayerMetadata: Record < string, {
     holy_book_id: 'guru-granth-sahib',
     type: 'morning',
     time_of_day: 'morning',
-    description: 'The morning prayer, first composition in Guru Granth Sahib'
+    description: 'The morning prayer, first composition in Guru Granth Sahib Ji'
   },
   'rehraas sahib.html': {
     id: 'rehraas-sahib',
@@ -175,7 +175,7 @@ async function migratePrayersFromJSON() {
           .upsert(
               {
                 id: 'guru-granth-sahib',
-                name: 'Guru Granth Sahib',
+                name: 'Guru Granth Sahib Ji',
                 name_punjabi: 'ਗੁਰੂ ਗ੍ਰੰਥ ਸਾਹਿਬ',
                 name_hindi: 'गुरु ग्रंथ साहिब',
                 description: 'The eternal Guru of the Sikhs'

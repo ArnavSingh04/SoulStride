@@ -408,7 +408,7 @@ function createLessonBlocks(
  * Main migration function
  */
 async function migrateGGSLessonsByPauri() {
-  console.log('🚀 Starting Guru Granth Sahib lessons migration (by Pauri)...\n');
+  console.log('🚀 Starting Guru Granth Sahib Ji lessons migration (by Pauri)...\n');
   
   try {
     // Get total pages
@@ -474,7 +474,7 @@ async function migrateGGSLessonsByPauri() {
         const lesson: Lesson = {
           id: lessonId,
           holy_book_id: 'guru-granth-sahib',
-          section: group.section || 'Guru Granth Sahib',
+          section: group.section || 'Guru Granth Sahib Ji',
           lesson_type: lessonType,
           difficulty: group.importance === 'high' ? 1 : Math.min(5, Math.floor(group.startPage / 100) + 1),
           estimated_time_min: group.importance === 'high' ? 8 : 5,

@@ -84,7 +84,7 @@ async function ensureHolyBook() {
   if (!data) {
     const { error } = await supabase.from('holy_books').insert({
       id: DEFAULT_HOLY_BOOK_ID,
-      name: 'Guru Granth Sahib',
+      name: 'Guru Granth Sahib Ji',
       name_punjabi: 'ਗੁਰੂ ਗ੍ਰੰਥ ਸਾਹਿਬ',
       description: 'Central religious scripture of Sikhism',
     });

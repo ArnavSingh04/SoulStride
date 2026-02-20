@@ -55,15 +55,15 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      const { error } = await signUp({ email, password, name });
+      const { user: newUser, error } = await signUp({ email, password, name });
       if (error) {
         Alert.alert(
           "Sign Up Failed",
           error.message || "Unable to create account"
         );
       } else {
-        // Successfully signed up and logged in → setup if not done, else home
-        const completed = await isOnboardingComplete();
+        // Use the new user's id so we don't read stale guest onboarding state
+        const completed = await isOnboardingComplete(newUser?.id);
         router.replace(completed ? "/(tabs)" : "/onboarding");
       }
     } catch (error) {

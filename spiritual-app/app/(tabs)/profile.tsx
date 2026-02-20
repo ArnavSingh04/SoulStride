@@ -83,12 +83,6 @@ export default function Settings() {
     await handlePreferenceChange("primaryLanguage", language);
   };
 
-  const handleTranslationLanguageSelect = async (
-    language: "english" | "hindi"
-  ) => {
-    await handlePreferenceChange("translationLanguage", language);
-  };
-
   const handleHolyBookToggle = async (holyBookId: string) => {
     if (!preferences) return;
 
@@ -416,16 +410,16 @@ export default function Settings() {
             </ThemedText>
           </View>
 
-          {/* Primary Language Selection */}
+          {/* Default language for content (prayers, etc.) */}
           <View style={styles.settingCard}>
             <View style={styles.settingHeader}>
               <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
-                Primary Language
+                Default language
               </ThemedText>
               <ThemedText
                 style={[styles.settingDescription, { color: theme.icon }]}
               >
-                Choose the main language for prayer content
+                Content is shown in this language when available; otherwise another language is used
               </ThemedText>
             </View>
             <View style={styles.languageButtons}>
@@ -491,7 +485,7 @@ export default function Settings() {
                 <ThemedText
                   style={[styles.settingDescription, { color: theme.icon }]}
                 >
-                  Display the original Punjabi text
+                  Display the original text in your default language (with fallback if not availabile)
                 </ThemedText>
               </View>
               <Switch
@@ -524,7 +518,7 @@ export default function Settings() {
                 <ThemedText
                   style={[styles.settingDescription, { color: theme.icon }]}
                 >
-                  Display translated text
+                  Display meaning in your default language (with fallback if not available)
                 </ThemedText>
               </View>
               <Switch
@@ -538,93 +532,6 @@ export default function Settings() {
                 }}
                 thumbColor={
                   preferences.showTranslation ? theme.tint : "#f4f3f4"
-                }
-              />
-            </View>
-
-            {preferences.showTranslation && (
-              <View style={styles.translationLanguageContainer}>
-                <ThemedText style={[styles.subLabel, { color: theme.icon }]}>
-                  Translation Language:
-                </ThemedText>
-                <View style={styles.languageButtons}>
-                  {(["english", "hindi"] as const).map((lang) => {
-                    const isSelected = preferences.translationLanguage === lang;
-                    const selectedBgColor =
-                      colorScheme === "dark" ? "#4a4a4a" : theme.tint;
-                    const textColor = isSelected ? "#fff" : theme.text;
-
-                    return (
-                      <TouchableOpacity
-                        key={lang}
-                        onPress={() => handleTranslationLanguageSelect(lang)}
-                        style={[
-                          styles.languageButton,
-                          styles.smallLanguageButton,
-                          {
-                            backgroundColor: isSelected
-                              ? selectedBgColor
-                              : colorScheme === "dark"
-                              ? "#1a1a1a"
-                              : "#e0e0e0",
-                            borderColor: isSelected
-                              ? colorScheme === "dark"
-                                ? "#4a4a4a"
-                                : theme.tint
-                              : "transparent"
-                          }
-                        ]}
-                      >
-                        <ThemedText
-                          style={[
-                            styles.languageButtonText,
-                            styles.smallLanguageButtonText,
-                            {
-                              color: textColor,
-                              fontWeight: isSelected ? "600" : "400"
-                            }
-                          ]}
-                        >
-                          {lang.charAt(0).toUpperCase() + lang.slice(1)}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-          </View>
-
-          <View
-            style={[
-              styles.settingCard,
-              {
-                backgroundColor: colorScheme === "dark" ? "#2a2a2a" : "#f8f8f8"
-              }
-            ]}
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <ThemedText type="defaultSemiBold" style={styles.settingLabel}>
-                  Show Transliteration
-                </ThemedText>
-                <ThemedText
-                  style={[styles.settingDescription, { color: theme.icon }]}
-                >
-                  Display phonetic transliteration
-                </ThemedText>
-              </View>
-              <Switch
-                value={preferences.showTransliteration}
-                onValueChange={(value) =>
-                  handlePreferenceChange("showTransliteration", value)
-                }
-                trackColor={{
-                  false: theme.icon + "40",
-                  true: theme.tint + "80"
-                }}
-                thumbColor={
-                  preferences.showTransliteration ? theme.tint : "#f4f3f4"
                 }
               />
             </View>

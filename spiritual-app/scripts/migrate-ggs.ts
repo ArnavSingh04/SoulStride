@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase-server';
 import { guruGranthSahibData } from '../data/guruGranthSahib';
 
 async function migrateGuruGranthSahib() {
-  console.log('📖 Starting Guru Granth Sahib migration to Supabase...');
+  console.log('📖 Starting Guru Granth Sahib Ji migration to Supabase...');
   console.log(`Total pages to migrate: ${guruGranthSahibData.length}`);
   
   // First, insert or update the holy book record
@@ -95,7 +95,7 @@ async function migrateGuruGranthSahib() {
   console.log(`✅ Successfully migrated: ${successCount} pages`);
   console.log(`📝 Total lines migrated: ${totalLines}`);
   console.log(`❌ Failed: ${errorCount} pages`);
-  console.log('\n🎉 Guru Granth Sahib migration completed!');
+  console.log('\n🎉 Guru Granth Sahib Ji migration completed!');
 }
 
 // Run migration

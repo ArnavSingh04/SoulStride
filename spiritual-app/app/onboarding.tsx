@@ -19,6 +19,7 @@ import {
   loadPrayerPreferences,
   savePrayerPreferences
 } from "@/services/prayer-preferences";
+import { saveOnboardingToUser } from "@/services/auth.service";
 import {
   setOnboardingComplete,
   updateUserProfile,
@@ -27,7 +28,7 @@ import {
 
 type Step = 0 | 1 | 2 | 3;
 
-const DAILY_MINUTE_OPTIONS = [5, 10, 15, 30, 45, 60] as const; // includes >30
+const DAILY_MINUTE_OPTIONS = [5, 10, 15, 30, 45, '60+'] as const; // includes >30
 const LANGUAGE_OPTIONS: ComfortLanguage[] = ["english", "punjabi", "hindi"];
 
 export default function Onboarding() {
@@ -89,6 +90,13 @@ export default function Onboarding() {
     });
 
     await updateUserProfile({
+      name: name.trim(),
+      dailyMinutes,
+      comfortLanguage,
+      selectedHolyBookIds
+    });
+
+    await saveOnboardingToUser({
       name: name.trim(),
       dailyMinutes,
       comfortLanguage,
@@ -279,10 +287,10 @@ export default function Onboarding() {
           {step === 3 && (
             <>
               <ThemedText type="defaultSemiBold" style={styles.cardTitle}>
-                Language you’re comfortable with
+                Your No. 1 most comfortable language
               </ThemedText>
               <ThemedText style={[styles.cardSubtitle, { color: theme.icon }]}>
-                We’ll set this as the default for prayer display.
+                We'll show content in this language by default. You can change it anytime in Settings.
               </ThemedText>
 
               <View style={styles.row}>

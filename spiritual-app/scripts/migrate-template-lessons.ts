@@ -445,7 +445,7 @@ const templateLessons: Array<{
         block_order: 2,
         block_type: 'context',
         block_data: {
-          text: 'Rehras Sahib is the evening prayer in Sikhism, typically recited at sunset. It is a compilation of hymns from Guru Granth Sahib that express gratitude and reflection.',
+          text: 'Rehras Sahib is the evening prayer in Sikhism, typically recited at sunset. It is a compilation of hymns from Guru Granth Sahib Ji that express gratitude and reflection.',
         },
       },
       {
