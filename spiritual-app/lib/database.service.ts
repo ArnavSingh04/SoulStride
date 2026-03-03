@@ -337,11 +337,15 @@ export async function getAllLessons(
     }
 
     if (!lessons || lessons.length === 0) {
-      console.log('No lessons found in database');
+      if (__DEV__) {
+        console.log('No lessons found in database');
+      }
       return [];
     }
 
-    console.log(`Found ${lessons.length} lessons`);
+    if (__DEV__) {
+      console.log(`Found ${lessons.length} lessons`);
+    }
 
     // Fetch blocks for each lesson
     const lessonsWithBlocks = await Promise.all(lessons.map(async (lesson) => {

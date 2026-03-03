@@ -31,7 +31,9 @@ export async function scheduleRoutineReminders(config: RoutineConfig): Promise<v
   
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
-    console.warn('Notification permissions not granted');
+    if (__DEV__) {
+      console.warn('Notification permissions not granted');
+    }
     return;
   }
   
@@ -52,7 +54,11 @@ export async function scheduleRoutineReminders(config: RoutineConfig): Promise<v
         },
       });
       
-      console.log(`Scheduled reminder for ${slotLabel.name} at ${slot.reminder.hour}:${slot.reminder.minute}`);
+      if (__DEV__) {
+        console.log(
+          `Scheduled reminder for ${slotLabel.name} at ${slot.reminder.hour}:${slot.reminder.minute}`
+        );
+      }
     }
   }
 }
