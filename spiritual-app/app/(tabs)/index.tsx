@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
-  Dimensions,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Animated
+  Animated,
+  useWindowDimensions
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -37,8 +37,6 @@ import { getNextLessonForUser } from "@/lib/database.service";
 import type { LessonWithBlocks } from "@/lib/database.types";
 import { TIME_SLOT_LABELS } from "@/types/routine";
 import type { TimeSlot } from "@/types/routine";
-
-const { width } = Dimensions.get("window");
 
 // Relevant images for cards (cached by expo-image)
 const CARD_IMAGES = {
@@ -147,6 +145,7 @@ export default function HomeScreen() {
   const theme = Colors[colorScheme ?? "light"];
   const router = useRouter();
   const { user } = useAuth();
+  const { width: windowWidth } = useWindowDimensions();
 
   const [username, setUsername] = useState<string>("");
   const [streakDays, setStreakDays] = useState<number>(0);
@@ -970,7 +969,8 @@ const styles = StyleSheet.create({
     gap: 12
   },
   quickCard: {
-    width: (width - 56) / 2,
+    flexBasis: "47%",
+    maxWidth: "47%",
     borderRadius: 18,
     padding: 18,
     marginBottom: 12,

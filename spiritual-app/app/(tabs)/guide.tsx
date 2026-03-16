@@ -38,6 +38,8 @@ export default function Guide() {
   const [reply, setReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+   // Track if we've actually attempted a request so we don't show "Retry" prematurely
+  const [hasRequested, setHasRequested] = useState(false);
 
   // Prevent double-submit / overlapping requests (common cause of "stuck loading")
   const inFlightRef = useRef(false);
@@ -60,6 +62,7 @@ export default function Guide() {
     setError(null);
     setReply(null);
     setLoading(true);
+    setHasRequested(true);
 
     // Abort any previous request
     abortRef.current?.abort();
@@ -234,7 +237,7 @@ export default function Guide() {
               </ThemedText>
             )}
 
-            {!loading && !reply && !error && (
+            {!loading && hasRequested && !reply && !error && (
               <TouchableOpacity
                 style={[styles.retryButton, { borderColor: theme.tint }]}
                 onPress={handleSearch}

@@ -11,9 +11,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  useWindowDimensions
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -35,7 +35,6 @@ import {
 import { getLessonProgressUserId } from "@/services/lesson-progress-user";
 import type { LessonWithBlocks } from "@/lib/database.types";
 
-const { width, height } = Dimensions.get("window");
 const NODE_SIZE = 64;
 const NODE_SPACING = 32; // Increased to account for labels and prevent overlap
 const PATH_WIDTH = 1.5;
@@ -105,6 +104,7 @@ function LearningJourneyInner(
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const { user } = useAuth();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [displayedLessons, setDisplayedLessons] = useState<LessonWithBlocks[]>(
     []
   );
@@ -150,7 +150,7 @@ function LearningJourneyInner(
       setDisplayedLessons(lessons);
       setCompletedLessons(completed);
       setHasMore(more);
-      generateNodes(lessons, completed);
+      generateNodes(lessons, completed, windowWidth);
     } catch (err) {
       console.error("Error loading lessons:", err);
       const errorMessage =
@@ -164,7 +164,7 @@ function LearningJourneyInner(
     } finally {
       setLoading(false);
     }
-  }, [holyBookId, user?.id]);
+  }, [holyBookId, user?.id, windowWidth]);
 
   useEffect(() => {
     loadLessons();
@@ -185,8 +185,8 @@ function LearningJourneyInner(
     const userId = await getLessonProgressUserId();
     const completed = await getCompletedLessonsForHolyBook(userId, holyBookId);
     setCompletedLessons(completed);
-    generateNodes(displayedLessons, completed);
-  }, [holyBookId, user?.id, displayedLessons]);
+    generateNodes(displayedLessons, completed, windowWidth);
+  }, [holyBookId, user?.id, displayedLessons, windowWidth]);
 
   useImperativeHandle(ref, () => ({ refreshProgress }), [refreshProgress]);
 
@@ -205,7 +205,7 @@ function LearningJourneyInner(
       if (lessons.length > 0) {
         setDisplayedLessons((prev) => {
           const updated = [...prev, ...lessons];
-          generateNodes(updated, completedLessons);
+          generateNodes(updated, completedLessons, windowWidth);
           return updated;
         });
       }
@@ -219,7 +219,8 @@ function LearningJourneyInner(
 
   const generateNodes = (
     lessonsToDisplay: LessonWithBlocks[],
-    completed: CompletedLesson[]
+    completed: CompletedLesson[],
+    canvasWidth: number
   ) => {
     const completedLessonIds = new Set(completed.map((c) => c.lesson_id));
     const completedOrderIndices = new Set(completed.map((c) => c.order_index));
@@ -237,9 +238,10 @@ function LearningJourneyInner(
         currentY += SECTION_HEADER_HEIGHT;
       }
 
+      const baseOffset = Math.min(canvasWidth * 0.12, 60);
       const offsetX =
-        globalIndex % 3 === 1 ? -40 : globalIndex % 3 === 2 ? 40 : 0;
-      const x = width / 2 - NODE_SIZE / 2 + offsetX;
+        globalIndex % 3 === 1 ? -baseOffset : globalIndex % 3 === 2 ? baseOffset : 0;
+      const x = canvasWidth / 2 - NODE_SIZE / 2 + offsetX;
       const y = currentY;
 
       const completed_ = completedLessonIds.has(lesson.id);
@@ -443,7 +445,7 @@ function LearningJourneyInner(
   const currentContentHeight =
     nodes.length > 0
       ? nodes[nodes.length - 1].y + NODE_SIZE + LABEL_HEIGHT + 100
-      : height;
+      : windowHeight;
 
   const isDark = colorScheme === "dark";
   const skyColor = isDark ? "#1a1a2e" : "#e8f4f8";
@@ -483,7 +485,7 @@ function LearningJourneyInner(
           {/* Decorative hills / banks (left and right curved shapes) */}
           <View style={styles.sceneryHills} pointerEvents="none">
             <Svg
-              width={width}
+              width={windowWidth}
               height={currentContentHeight}
               style={styles.hillsSvg}
             >
@@ -527,20 +529,20 @@ function LearningJourneyInner(
               </Defs>
               {/* Left bank - curved path */}
               <Path
-                d={`M 0 ${currentContentHeight} Q ${width * 0.25} ${
+                d={`M 0 ${currentContentHeight} Q ${windowWidth * 0.25} ${
                   currentContentHeight * 0.3
                 } ${
-                  width * 0.38
+                  windowWidth * 0.38
                 } ${currentContentHeight} L 0 ${currentContentHeight} Z`}
                 fill="url(#hillLeft)"
               />
               {/* Right bank */}
               <Path
-                d={`M ${width} ${currentContentHeight} Q ${width * 0.75} ${
+                d={`M ${windowWidth} ${currentContentHeight} Q ${windowWidth * 0.75} ${
                   currentContentHeight * 0.4
                 } ${
-                  width * 0.62
-                } ${currentContentHeight} L ${width} ${currentContentHeight} Z`}
+                  windowWidth * 0.62
+                } ${currentContentHeight} L ${windowWidth} ${currentContentHeight} Z`}
                 fill="url(#hillRight)"
               />
             </Svg>
@@ -549,7 +551,7 @@ function LearningJourneyInner(
           {/* River path (thick band + center line) */}
           <Svg
             style={styles.pathSvg}
-            width={width}
+            width={windowWidth}
             height={currentContentHeight}
           >
             <Defs>
